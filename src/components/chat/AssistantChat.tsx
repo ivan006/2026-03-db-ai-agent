@@ -1,4 +1,4 @@
-import { Thread } from "@assistant-ui/react";
+import { Thread } from "./Thread";
 import { MyRuntimeProvider } from "./MyRuntimeProvider";
 
 export function AssistantChat() {
