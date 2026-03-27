@@ -1,6 +1,6 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_API_URL = "/anthropic/v1/messages";
 
 export const AWsChatModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
@@ -10,7 +10,9 @@ export const AWsChatModelAdapter: ChatModelAdapter = {
         "Content-Type": "application/json",
         "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
         "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-client-side-api-key-allow": "true",
+        ...(import.meta.env.DEV && {
+          "anthropic-dangerous-direct-browser-access": "true",
+        }),
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
