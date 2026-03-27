@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { AssistantRuntimeProvider, useLocalRuntime } from "@assistant-ui/react";
-import { AWsChatModelAdapter } from "./ChatModelAdapter";
+import { IAModelAdapter } from "./ChatModelAdapter";
 
 export function MyRuntimeProvider({ children }: { children: ReactNode }) {
-  const runtime = useLocalRuntime(AWsChatModelAdapter);
+  const runtime = useLocalRuntime(IAModelAdapter);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
