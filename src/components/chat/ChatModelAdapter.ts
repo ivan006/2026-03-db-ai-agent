@@ -1,61 +1,150 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
+import { a as PostgrestMcpServer } from "@supabase/mcp-server-postgrest";
+import { StreamTransport } from "@supabase/mcp-utils";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
-const ANTHROPIC_API_URL = "/anthropic/v1/messages";
+const ANTHROPIC_API_URL = import.meta.env.DEV
+  ? "/anthropic/v1/messages"
+  : import.meta.env.VITE_API_GATEWAY_URL;
 
-export const AWsChatModelAdapter: ChatModelAdapter = {
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+async function createMcpClient() {
+  const clientTransport = new StreamTransport();
+  const serverTransport = new StreamTransport();
+
+  clientTransport.readable.pipeTo(serverTransport.writable);
+  serverTransport.readable.pipeTo(clientTransport.writable);
+
+  const client = new Client(
+    { name: "ia-client", version: "0.1.0" },
+    { capabilities: {} },
+  );
+
+  const server = new PostgrestMcpServer({
+    apiUrl: `${supabaseUrl}/rest/v1`,
+    apiKey: supabaseAnonKey,
+    schema: "public",
+  });
+
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+
+  const { tools } = await client.listTools();
+  return { client, tools };
+}
+
+async function fetchClaude(body: object, abortSignal?: AbortSignal) {
+  const response = await fetch(ANTHROPIC_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      ...(import.meta.env.DEV && {
+        "anthropic-dangerous-direct-browser-access": "true",
+      }),
+    },
+    body: JSON.stringify(body),
+    signal: abortSignal,
+  });
+  return response.json();
+}
+
+const SYSTEM_PROMPT = `You are an IA (Information Agent). You help users interact with their data.
+When asked about data, use the available tools to query the database, then explain
+the results in plain, friendly language. Never show raw JSON — always interpret it.`;
+
+export const IAModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const response = await fetch(ANTHROPIC_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        ...(import.meta.env.DEV && {
-          "anthropic-dangerous-direct-browser-access": "true",
-        }),
-      },
-      body: JSON.stringify({
+    const { tools } = await createMcpClient();
+
+    const toolDefinitions = tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      input_schema: tool.inputSchema,
+    }));
+
+    const formattedMessages = messages.map((m) => ({
+      role: m.role,
+      content: m.content
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map((p) => p.text)
+        .join(" "),
+    }));
+
+    const data = await fetchClaude(
+      {
         model: "claude-sonnet-4-5",
         max_tokens: 1000,
-        stream: true,
-        system:
-          "You are an IA (Information Agent). You help users interact with their data.",
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content
-            .filter(
-              (p): p is { type: "text"; text: string } => p.type === "text",
-            )
-            .map((p) => p.text)
-            .join(" "),
-        })),
-      }),
-      signal: abortSignal,
-    });
+        system: SYSTEM_PROMPT,
+        tools: toolDefinitions,
+        messages: formattedMessages,
+      },
+      abortSignal,
+    );
 
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
-    let accumulated = "";
+    // Handle tool use — read → act → reply loop
+    if (data.stop_reason === "tool_use") {
+      const toolUseBlock = data.content.find((b: any) => b.type === "tool_use");
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      if (toolUseBlock) {
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: `_Querying your data..._\n\n`,
+            },
+          ],
+        };
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split("\n").filter((l) => l.startsWith("data: "));
+        const { client } = await createMcpClient();
+        const toolResult = await client.callTool({
+          name: toolUseBlock.name,
+          arguments: toolUseBlock.input,
+        });
 
-      for (const line of lines) {
-        const data = line.slice(6);
-        if (data === "[DONE]") break;
+        // Send result back to Claude for plain language interpretation
+        const followUpData = await fetchClaude(
+          {
+            model: "claude-sonnet-4-5",
+            max_tokens: 1000,
+            system: SYSTEM_PROMPT,
+            tools: toolDefinitions,
+            messages: [
+              ...formattedMessages,
+              { role: "assistant", content: data.content },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "tool_result",
+                    tool_use_id: toolUseBlock.id,
+                    content: JSON.stringify(toolResult.content),
+                  },
+                ],
+              },
+            ],
+          },
+          abortSignal,
+        );
 
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.type === "content_block_delta" && parsed.delta?.text) {
-            accumulated += parsed.delta.text;
-            yield { content: [{ type: "text" as const, text: accumulated }] };
-          }
-        } catch {}
+        const text = followUpData.content
+          .filter((b: any) => b.type === "text")
+          .map((b: any) => b.text)
+          .join("");
+
+        yield { content: [{ type: "text" as const, text }] };
       }
+    } else {
+      // Direct text response — no tool needed
+      const text = data.content
+        .filter((b: any) => b.type === "text")
+        .map((b: any) => b.text)
+        .join("");
+
+      yield { content: [{ type: "text" as const, text }] };
     }
   },
 };
