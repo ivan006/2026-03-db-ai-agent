@@ -46,6 +46,29 @@ const IA_TOOLS = [
       required: [],
     },
   },
+  {
+    name: "create_deal",
+    description: "Creates a new deal in the database.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "The name of the deal or company",
+        },
+        status: {
+          type: "string",
+          enum: ["open", "closed"],
+          description: "The status of the deal",
+        },
+        value: {
+          type: "number",
+          description: "The monetary value of the deal",
+        },
+      },
+      required: ["name"],
+    },
+  },
 ];
 
 // ── Tool Execution ────────────────────────────────────────────────
@@ -60,9 +83,9 @@ async function executeTool(
   switch (name) {
     case "list_tables": {
       const tables = IA_TOOLS.filter((t) => t.name !== "list_tables").map((t) =>
-        t.name.replace("query_", ""),
+        t.name.replace("query_", "").replace("create_", ""),
       );
-      return JSON.stringify({ tables });
+      return JSON.stringify({ tables: [...new Set(tables)] });
     }
 
     case "query_deals": {
@@ -78,6 +101,21 @@ async function executeTool(
       const { data, error } = await query;
       if (error) return JSON.stringify({ error: error.message });
       return JSON.stringify({ deals: data });
+    }
+
+    case "create_deal": {
+      const { data, error } = await supabase
+        .from("deals")
+        .insert({
+          name: input.name as string,
+          status: (input.status as string) ?? "open",
+          value: input.value as number,
+        })
+        .select()
+        .single();
+
+      if (error) return JSON.stringify({ error: error.message });
+      return JSON.stringify({ deal: data });
     }
 
     default:
@@ -106,6 +144,7 @@ async function fetchClaude(body: object, abortSignal?: AbortSignal) {
 
 const SYSTEM_PROMPT = `You are an IA (Information Agent). You help users interact with their data.
 When a user asks about data, use the available tools to query the database.
+When a user wants to create or add something, use the appropriate create tool.
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
 If you are unsure what the user wants, ask a clarifying question.`;
@@ -143,7 +182,7 @@ export const IAModelAdapter: ChatModelAdapter = {
           content: [
             {
               type: "text" as const,
-              text: `_Querying your data..._\n\n`,
+              text: `_Working on it..._\n\n`,
             },
           ],
         };
