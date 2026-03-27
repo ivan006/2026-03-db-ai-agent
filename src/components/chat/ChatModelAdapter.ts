@@ -1,45 +1,59 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
 
-/**
- * Mock adapter that simulates AI responses.
- * Replace this with your AWS API Gateway adapter later.
- */
-export const MockChatModelAdapter: ChatModelAdapter = {
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+
+export const AWsChatModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const lastUserMessage = [...messages]
-      .reverse()
-      .find((m) => m.role === "user");
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-client-side-api-key-allow": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: 1000,
+        stream: true,
+        system:
+          "You are an IA (Information Agent). You help users interact with their data.",
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content
+            .filter(
+              (p): p is { type: "text"; text: string } => p.type === "text",
+            )
+            .map((p) => p.text)
+            .join(" "),
+        })),
+      }),
+      signal: abortSignal,
+    });
 
-    const userText =
-      lastUserMessage?.content
-        ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
-        .map((p) => p.text)
-        .join(" ") ?? "";
-
-    const mockResponses = [
-      `Great question! You asked about: "${userText}"\n\nThis is a **mock response** from the demo adapter. Once you connect your AWS API Gateway, real AI responses will appear here.`,
-      `I received your message: "${userText}"\n\nTo connect this to your **AWS API Gateway**:\n1. Create an edge function in Lovable Cloud\n2. Configure your AWS endpoint URL\n3. Swap out the mock adapter\n\n_This is a simulated response._`,
-      `Here's a demo reply to: "${userText}"\n\n### Things you can try:\n- Type any message to see streaming\n- The UI supports **markdown** rendering\n- Code blocks work too:\n\n\`\`\`js\nconsole.log("Hello from assistant-ui!");\n\`\`\`\n\n_Connect your AWS backend to get real responses._`,
-    ];
-
-    const response =
-      mockResponses[Math.floor(Math.random() * mockResponses.length)];
-
-    // Simulate token-by-token streaming
-    const words = response.split(" ");
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
     let accumulated = "";
 
-    for (let i = 0; i < words.length; i++) {
-      if (abortSignal?.aborted) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      accumulated += (i === 0 ? "" : " ") + words[i];
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n").filter((l) => l.startsWith("data: "));
 
-      yield {
-        content: [{ type: "text" as const, text: accumulated }],
-      };
+      for (const line of lines) {
+        const data = line.slice(6);
+        if (data === "[DONE]") break;
 
-      // Simulate typing delay
-      await new Promise((r) => setTimeout(r, 30 + Math.random() * 40));
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+            accumulated += parsed.delta.text;
+            yield { content: [{ type: "text" as const, text: accumulated }] };
+          }
+        } catch {}
+      }
     }
   },
 };
