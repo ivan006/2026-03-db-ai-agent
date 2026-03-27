@@ -1,39 +1,91 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
-import { a as PostgrestMcpServer } from "@supabase/mcp-server-postgrest";
-import { StreamTransport } from "@supabase/mcp-utils";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { createClient } from "@supabase/supabase-js";
 
 const ANTHROPIC_API_URL = import.meta.env.DEV
   ? "/anthropic/v1/messages"
   : import.meta.env.VITE_API_GATEWAY_URL;
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+);
 
-async function createMcpClient() {
-  const clientTransport = new StreamTransport();
-  const serverTransport = new StreamTransport();
+// ── IA Ability Layer ──────────────────────────────────────────────
+// These are the only operations the IA is allowed to perform.
+// Each tool maps directly to a Supabase JS call.
 
-  clientTransport.readable.pipeTo(serverTransport.writable);
-  serverTransport.readable.pipeTo(clientTransport.writable);
+const IA_TOOLS = [
+  {
+    name: "list_tables",
+    description:
+      "Lists all available tables in the database that the user can interact with.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "query_deals",
+    description:
+      "Fetches deals from the database. Can filter by status and/or minimum value.",
+    input_schema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["open", "closed"],
+          description: "Filter deals by status",
+        },
+        min_value: {
+          type: "number",
+          description:
+            "Filter deals with value greater than or equal to this amount",
+        },
+      },
+      required: [],
+    },
+  },
+];
 
-  const client = new Client(
-    { name: "ia-client", version: "0.1.0" },
-    { capabilities: {} },
-  );
+// ── Tool Execution ────────────────────────────────────────────────
+// Each tool call is executed here using the Supabase JS client.
+// The client uses the anon key — RLS will enforce user permissions
+// once auth is added.
 
-  const server = new PostgrestMcpServer({
-    apiUrl: `${supabaseUrl}/rest/v1`,
-    apiKey: supabaseAnonKey,
-    schema: "public",
-  });
+async function executeTool(
+  name: string,
+  input: Record<string, unknown>,
+): Promise<string> {
+  switch (name) {
+    case "list_tables": {
+      const tables = IA_TOOLS.filter((t) => t.name !== "list_tables").map((t) =>
+        t.name.replace("query_", ""),
+      );
+      return JSON.stringify({ tables });
+    }
 
-  await server.connect(serverTransport);
-  await client.connect(clientTransport);
+    case "query_deals": {
+      let query = supabase.from("deals").select("*");
 
-  const { tools } = await client.listTools();
-  return { client, tools };
+      if (input.status) {
+        query = query.eq("status", input.status as string);
+      }
+      if (input.min_value !== undefined) {
+        query = query.gte("value", input.min_value as number);
+      }
+
+      const { data, error } = await query;
+      if (error) return JSON.stringify({ error: error.message });
+      return JSON.stringify({ deals: data });
+    }
+
+    default:
+      return JSON.stringify({ error: `Unknown tool: ${name}` });
+  }
 }
+
+// ── Claude API helper ─────────────────────────────────────────────
 
 async function fetchClaude(body: object, abortSignal?: AbortSignal) {
   const response = await fetch(ANTHROPIC_API_URL, {
@@ -53,19 +105,15 @@ async function fetchClaude(body: object, abortSignal?: AbortSignal) {
 }
 
 const SYSTEM_PROMPT = `You are an IA (Information Agent). You help users interact with their data.
-When asked about data, use the available tools to query the database, then explain
-the results in plain, friendly language. Never show raw JSON — always interpret it.`;
+When a user asks about data, use the available tools to query the database.
+Then explain the results in plain, friendly language.
+Never show raw JSON or technical details — always interpret results naturally.
+If you are unsure what the user wants, ask a clarifying question.`;
+
+// ── Adapter ───────────────────────────────────────────────────────
 
 export const IAModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const { tools } = await createMcpClient();
-
-    const toolDefinitions = tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.inputSchema,
-    }));
-
     const formattedMessages = messages.map((m) => ({
       role: m.role,
       content: m.content
@@ -74,18 +122,19 @@ export const IAModelAdapter: ChatModelAdapter = {
         .join(" "),
     }));
 
+    // First call — Claude decides whether to use a tool or reply directly
     const data = await fetchClaude(
       {
         model: "claude-sonnet-4-5",
         max_tokens: 1000,
         system: SYSTEM_PROMPT,
-        tools: toolDefinitions,
+        tools: IA_TOOLS,
         messages: formattedMessages,
       },
       abortSignal,
     );
 
-    // Handle tool use — read → act → reply loop
+    // ── read → act → reply loop ───────────────────────────────────
     if (data.stop_reason === "tool_use") {
       const toolUseBlock = data.content.find((b: any) => b.type === "tool_use");
 
@@ -99,11 +148,11 @@ export const IAModelAdapter: ChatModelAdapter = {
           ],
         };
 
-        const { client } = await createMcpClient();
-        const toolResult = await client.callTool({
-          name: toolUseBlock.name,
-          arguments: toolUseBlock.input,
-        });
+        // Execute the tool against Supabase
+        const toolResult = await executeTool(
+          toolUseBlock.name,
+          toolUseBlock.input,
+        );
 
         // Send result back to Claude for plain language interpretation
         const followUpData = await fetchClaude(
@@ -111,7 +160,7 @@ export const IAModelAdapter: ChatModelAdapter = {
             model: "claude-sonnet-4-5",
             max_tokens: 1000,
             system: SYSTEM_PROMPT,
-            tools: toolDefinitions,
+            tools: IA_TOOLS,
             messages: [
               ...formattedMessages,
               { role: "assistant", content: data.content },
@@ -121,7 +170,7 @@ export const IAModelAdapter: ChatModelAdapter = {
                   {
                     type: "tool_result",
                     tool_use_id: toolUseBlock.id,
-                    content: JSON.stringify(toolResult.content),
+                    content: toolResult,
                   },
                 ],
               },
@@ -138,7 +187,7 @@ export const IAModelAdapter: ChatModelAdapter = {
         yield { content: [{ type: "text" as const, text }] };
       }
     } else {
-      // Direct text response — no tool needed
+      // Direct response — no tool needed
       const text = data.content
         .filter((b: any) => b.type === "text")
         .map((b: any) => b.text)
