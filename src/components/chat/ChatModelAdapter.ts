@@ -6,8 +6,9 @@ import type { ChatModelAdapter } from "@assistant-ui/react";
  */
 export const MockChatModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    const lastUserMessage =
-      [...messages].reverse().find((m) => m.role === "user");
+    const lastUserMessage = [...messages]
+      .reverse()
+      .find((m) => m.role === "user");
 
     const userText =
       lastUserMessage?.content
