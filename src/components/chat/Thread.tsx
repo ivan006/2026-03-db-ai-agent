@@ -1,55 +1,54 @@
-import { ThreadPrimitive } from "@assistant-ui/react";
+import {
+  ThreadPrimitive,
+  ComposerPrimitive,
+  MessagePrimitive,
+} from "@assistant-ui/react";
 import { SendHorizonal } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
-function ThreadMessage() {
+function UserMessage() {
   return (
-    <ThreadPrimitive.Messages
-      components={{
-        UserMessage: () => (
-          <div className="flex justify-end px-4 py-2">
-            <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[hsl(var(--chat-user-bg))] px-4 py-3 text-[hsl(var(--chat-user-fg))] text-sm leading-relaxed shadow-sm">
-              <ThreadPrimitive.If user>
-                <p className="whitespace-pre-wrap"><ThreadPrimitive.Content /></p>
-              </ThreadPrimitive.If>
-            </div>
+    <MessagePrimitive.Root className="flex justify-end px-4 py-2">
+      <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[hsl(var(--chat-user-bg))] px-4 py-3 text-[hsl(var(--chat-user-fg))] text-sm leading-relaxed shadow-sm">
+        <MessagePrimitive.Content />
+      </div>
+    </MessagePrimitive.Root>
+  );
+}
+
+function AssistantMessage() {
+  return (
+    <MessagePrimitive.Root className="flex justify-start px-4 py-2">
+      <div className="flex gap-3 max-w-[85%]">
+        <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
+          AI
+        </div>
+        <div className="rounded-2xl rounded-bl-md bg-[hsl(var(--chat-assistant-bg))] px-4 py-3 text-[hsl(var(--chat-assistant-fg))] text-sm leading-relaxed shadow-sm border border-border">
+          <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-li:my-0">
+            <MessagePrimitive.Content
+              components={{
+                Text: ({ text }) => <ReactMarkdown>{text}</ReactMarkdown>,
+              }}
+            />
           </div>
-        ),
-        AssistantMessage: () => (
-          <div className="flex justify-start px-4 py-2">
-            <div className="flex gap-3 max-w-[85%]">
-              <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">
-                AI
-              </div>
-              <div className="rounded-2xl rounded-bl-md bg-[hsl(var(--chat-assistant-bg))] px-4 py-3 text-[hsl(var(--chat-assistant-fg))] text-sm leading-relaxed shadow-sm border border-border">
-                <div className="prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-li:my-0">
-                  <ThreadPrimitive.Content
-                    components={{
-                      Text: ({ text }) => <ReactMarkdown>{text}</ReactMarkdown>,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        ),
-      }}
-    />
+        </div>
+      </div>
+    </MessagePrimitive.Root>
   );
 }
 
 function Composer() {
   return (
-    <ThreadPrimitive.Composer className="flex items-end gap-2 border-t border-border bg-card p-4">
-      <ThreadPrimitive.ComposerInput
+    <ComposerPrimitive.Root className="flex items-end gap-2 border-t border-border bg-card p-4">
+      <ComposerPrimitive.Input
         placeholder="Type a message..."
         className="flex-1 resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         autoFocus
       />
-      <ThreadPrimitive.ComposerSend className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
+      <ComposerPrimitive.Send className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
         <SendHorizonal className="h-4 w-4" />
-      </ThreadPrimitive.ComposerSend>
-    </ThreadPrimitive.Composer>
+      </ComposerPrimitive.Send>
+    </ComposerPrimitive.Root>
   );
 }
 
@@ -72,7 +71,12 @@ export function Thread() {
             </div>
           </div>
         </ThreadPrimitive.Empty>
-        <ThreadMessage />
+        <ThreadPrimitive.Messages
+          components={{
+            UserMessage,
+            AssistantMessage,
+          }}
+        />
       </ThreadPrimitive.Viewport>
       <Composer />
     </ThreadPrimitive.Root>
