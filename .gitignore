@@ -28,3 +28,4 @@ dist-ssr
 .env.development.old
 src/types/database.types.ts
 schema.js
+schema.ts
