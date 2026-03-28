@@ -72,9 +72,6 @@ const IA_TOOLS = [
 ];
 
 // ── Tool Execution ────────────────────────────────────────────────
-// Each tool call is executed here using the Supabase JS client.
-// The client uses the anon key — RLS will enforce user permissions
-// once auth is added.
 
 async function executeTool(
   name: string,
@@ -82,10 +79,28 @@ async function executeTool(
 ): Promise<string> {
   switch (name) {
     case "list_tables": {
-      const tables = IA_TOOLS.filter((t) => t.name !== "list_tables").map((t) =>
-        t.name.replace("query_", "").replace("create_", ""),
-      );
-      return JSON.stringify({ tables: [...new Set(tables)] });
+      const { data, error } = await supabase.rpc("list_public_tables");
+
+      if (error) {
+        // Fallback — query information_schema directly
+        const { data: schemaData, error: schemaError } = await supabase
+          .from("information_schema.tables" as any)
+          .select("table_name")
+          .eq("table_schema", "public")
+          .eq("table_type", "BASE TABLE");
+
+        if (schemaError) {
+          // Last resort — return known tables from ability layer
+          const known = ["deals"];
+          return JSON.stringify({ tables: known });
+        }
+
+        return JSON.stringify({
+          tables: schemaData?.map((t: any) => t.table_name),
+        });
+      }
+
+      return JSON.stringify({ tables: data });
     }
 
     case "query_deals": {
