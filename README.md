@@ -1,194 +1,56 @@
 # NLUI — Information Agent (IA)
 
-A database agent chatbot that lets users interact with their Supabase database through natural language. Built on React, assistant-ui, and the Anthropic API.
+## Connecting your database
 
----
-
-## How it works
-
-The IA reads your database schema from `src/components/chat/ia.schema.ts` and uses it to:
-
-- Know what tables and columns exist
-- Generate the right tool definitions for Claude
-- Tell Claude the exact column names to use when creating or updating records
-
-No custom SQL functions required. Works with any Supabase project.
-
----
-
-## Connecting to a Supabase project
-
-### Step 1 — Set your environment variables
-
-Create a `.env.development` file in the project root:
-
-```
-VITE_ANTHROPIC_API_KEY=your_anthropic_key
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key
-```
-
-Get these from your Supabase dashboard under **Project Settings → API**.
-
----
-
-### Step 2 — Export your database schema
-
-Run the following command to generate TypeScript types from your Supabase project:
+### 1. Login to Supabase CLI
 
 ```bash
-npx supabase gen types typescript --project-id your-project-ref > src/types/database.types.ts
+npx supabase login
 ```
 
-Replace `your-project-ref` with your Supabase project ID. You can find this under **Project Settings → General → Project ID** in the Supabase dashboard.
-
-If prompted, run `npx supabase login` first to authenticate.
+This opens a browser window. Log in and paste the verification code back in the terminal.
 
 ---
 
-### Step 3 — Update ia.schema.ts
+### 2. Export your schema
 
-Open `src/components/chat/ia.schema.ts` and update it to match the `Tables` section of your generated `database.types.ts`.
+```bash
+npx supabase gen types typescript --project-id your-project-id
+```
 
-**Example — if your `database.types.ts` contains:**
+Find your project ID in the Supabase dashboard under **Project Settings → General → Project ID**.
+
+---
+
+### 3. What to extract
+
+From the output, copy only the `Database` type object — everything from `export type Database = {` to its closing `}`.
+
+It looks like this:
 
 ```typescript
-deals: {
-  Row: {
-    id: string
-    name: string
-    status: string | null
-    value: number | null
-    created_at: string | null
-  }
-  Insert: {
-    id?: string
-    name: string
-    status?: string | null
-    value?: number | null
-    created_at?: string | null
+export type Database = {
+  public: {
+    Tables: {
+      your_table: {
+        Row: { ... }
+        Insert: { ... }
+        Update: { ... }
+      }
+    }
+    ...
   }
 }
 ```
 
-**Your `ia.schema.ts` should look like:**
-
-```typescript
-export const IA_SCHEMA: Schema = {
-  deals: {
-    columns: {
-      id: { type: "string", required: false }, // auto-generated
-      name: { type: "string", required: true },
-      status: { type: "string", required: false },
-      value: { type: "number", required: false },
-      created_at: { type: "string", required: false }, // auto-generated
-    },
-  },
-};
-```
-
-**Rules:**
-
-- `required: true` = the column is required in the `Insert` type (no `?`)
-- `required: false` = the column is optional (has `?` or is auto-generated)
-- Use `"string"` for text, uuid, timestamptz
-- Use `"number"` for numeric, integer, float
-- Use `"boolean"` for boolean columns
-- Skip columns you don't want the IA to know about
-
 ---
 
-### Step 4 — Add a new table
+### 4. Where to put it
 
-When you add a new table to your Supabase project:
-
-1. Re-run the schema export:
-
-   ```bash
-   npx supabase gen types typescript --project-id your-project-ref > src/types/database.types.ts
-   ```
-
-2. Add the new table to `ia.schema.ts`:
-
-   ```typescript
-   export const IA_SCHEMA: Schema = {
-     deals: { ... },
-     contacts: {           // ← new table
-       columns: {
-         id:    { type: "string", required: false },
-         name:  { type: "string", required: true  },
-         email: { type: "string", required: false },
-       },
-     },
-   };
-   ```
-
-3. Add RLS policies in Supabase for the new table — the IA will automatically be able to perform the operations that RLS allows.
-
----
-
-## RLS policies
-
-The IA respects your Supabase Row Level Security policies. It uses the logged-in user's session token for all database calls, so RLS applies automatically.
-
-Make sure your tables have appropriate policies. For example:
-
-```sql
--- Allow authenticated users to read deals
-create policy "users can read deals"
-on deals for select
-to authenticated
-using (true);
-
--- Allow authenticated users to insert deals
-create policy "users can insert deals"
-on deals for insert
-to authenticated
-with check (true);
-```
-
----
-
-## Production deployment
-
-For production, set up a PHP proxy to keep your Anthropic API key server-side:
-
-1. Deploy `anthropic-proxy.php` to your web server
-2. Create a server-side `.env` file with `ANTHROPIC_API_KEY=your_key`
-3. Protect `.env` with `.htaccess`
-4. Set `VITE_API_GATEWAY_URL=https://yourdomain.com/anthropic-proxy.php` in `.env.production`
-5. Run `npm run build` and deploy the `dist` folder
-
----
-
-## File structure
+Paste it into:
 
 ```
-src/
-├── components/
-│   └── chat/
-│       ├── ia.schema.ts        ← update this for your database
-│       ├── supabase.ts         ← Supabase client and tool execution
-│       ├── anthropic.ts        ← Claude API and system prompt
-│       ├── ChatModelAdapter.ts ← IA orchestration loop
-│       ├── AssistantChat.tsx   ← chat UI with personality panel
-│       ├── MyRuntimeProvider.tsx
-│       └── Thread.tsx
-├── types/
-│   └── database.types.ts      ← generated by supabase gen types
-└── pages/
-    ├── Login.tsx               ← two-step auth page
-    └── Index.tsx               ← chat page
+src/schema.js
 ```
 
----
-
-## Regenerating schema types
-
-Run this whenever your database schema changes:
-
-```bash
-npx supabase gen types typescript --project-id your-project-ref > src/types/database.types.ts
-```
-
-Then update `ia.schema.ts` to match.
+This file is gitignored. See `src/schema.js.example` for the expected structure.

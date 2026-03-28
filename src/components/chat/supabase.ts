@@ -1,11 +1,10 @@
 // ── Supabase ──────────────────────────────────────────────────────
 // Handles all communication with the Supabase database.
-// Uses the authenticated user's session token for all requests
-// so RLS treats every call as that specific user.
-// Loads tools dynamically from RLS policies.
-// Loads schema info (column names and types) for each table.
+// Schema is automatically extracted from src/schema.ts at build time
+// via the vite-plugin-schema Vite plugin — no manual config needed.
 
 import { createClient } from "@supabase/supabase-js";
+import { RUNTIME_SCHEMA } from "virtual:schema";
 
 // Base client — used for auth operations only
 export const supabase = createClient(
@@ -14,15 +13,13 @@ export const supabase = createClient(
 );
 
 // ── Authenticated client ──────────────────────────────────────────
-// Returns a Supabase client authenticated as the logged-in user.
-// RLS policies apply based on auth.uid() from their session token.
 
 export async function getAuthenticatedClient() {
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session) return supabase; // fallback to anon if not logged in
+  if (!session) return supabase;
 
   return createClient(
     import.meta.env.VITE_SUPABASE_URL,
@@ -37,131 +34,91 @@ export async function getAuthenticatedClient() {
   );
 }
 
-// ── Types ─────────────────────────────────────────────────────────
+// ── Tool generation ───────────────────────────────────────────────
+// RUNTIME_SCHEMA is a plain object: { tableName: ["col1", "col2", ...] }
+// Automatically extracted from src/schema.ts by vite-plugin-schema
 
-type Policy = {
-  tablename: string;
-  cmd: string;
-  policyname: string;
-  qual: string | null;
-  with_check: string | null;
+export type IATool = {
+  name: string;
+  description: string;
+  input_schema: object;
 };
 
-export type ColumnInfo = {
-  table_name: string;
-  column_name: string;
-  data_type: string;
-  is_nullable: string;
-};
+export function buildToolsFromSchema(): IATool[] {
+  const tools: IATool[] = [
+    {
+      name: "list_tables",
+      description: "Lists all available tables in the database.",
+      input_schema: { type: "object", properties: {}, required: [] },
+    },
+  ];
 
-// ── Schema fetching ───────────────────────────────────────────────
-
-export async function getTableSchema(): Promise<ColumnInfo[]> {
-  const client = await getAuthenticatedClient();
-  const { data, error } = await client.rpc("get_table_columns");
-  if (error || !data) {
-    console.error("Failed to load table schema:", error?.message);
-    return [];
-  }
-  return data as ColumnInfo[];
-}
-
-// ── Tool generation from RLS policies ────────────────────────────
-// The database policies ARE the ability layer.
-// Adding a policy automatically adds the corresponding IA tool.
-// Removing a policy removes the tool. No code changes needed.
-
-function cmdToToolName(cmd: string, tablename: string): string {
-  switch (cmd.toUpperCase()) {
-    case "SELECT":
-      return `query_${tablename}`;
-    case "INSERT":
-      return `create_${tablename}`;
-    case "UPDATE":
-      return `update_${tablename}`;
-    case "DELETE":
-      return `delete_${tablename}`;
-    default:
-      return `${cmd.toLowerCase()}_${tablename}`;
-  }
-}
-
-function cmdToDescription(cmd: string, tablename: string): string {
-  switch (cmd.toUpperCase()) {
-    case "SELECT":
-      return `Fetches records from the ${tablename} table. Supports optional filters.`;
-    case "INSERT":
-      return `Creates a new record in the ${tablename} table.`;
-    case "UPDATE":
-      return `Updates an existing record in the ${tablename} table.`;
-    case "DELETE":
-      return `Deletes a record from the ${tablename} table.`;
-    default:
-      return `Performs ${cmd} operation on the ${tablename} table.`;
-  }
-}
-
-export async function buildToolsFromPolicies() {
-  const client = await getAuthenticatedClient();
-  const { data, error } = await client.rpc("get_ia_tools");
-
-  if (error || !data) {
-    console.error("Failed to load IA tools from policies:", error?.message);
-    return [];
-  }
-
-  const policies: Policy[] = data;
-
-  // Deduplicate — one tool per table+cmd combination
-  const seen = new Set<string>();
-  const tools = [];
-
-  for (const policy of policies) {
-    const key = `${policy.tablename}_${policy.cmd}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+  for (const [tablename, columns] of Object.entries(RUNTIME_SCHEMA)) {
+    const colList = (columns as string[]).join(", ");
 
     tools.push({
-      name: cmdToToolName(policy.cmd, policy.tablename),
-      description: cmdToDescription(policy.cmd, policy.tablename),
+      name: `query_${tablename}`,
+      description: `Fetches records from ${tablename}. Available columns: ${colList}. Supports optional key-value filters.`,
       input_schema: {
         type: "object",
         properties: {
           filters: {
             type: "object",
-            description: `Optional key-value filters to apply to the ${policy.tablename} query`,
-          },
-          data: {
-            type: "object",
-            description: `Data payload for INSERT or UPDATE operations on ${policy.tablename}`,
-          },
-          id: {
-            type: "string",
-            description: `Record ID for UPDATE or DELETE operations on ${policy.tablename}`,
+            description: `Key-value pairs to filter ${tablename} records. Use exact column names: ${colList}`,
           },
         },
         required: [],
       },
     });
-  }
 
-  // Always include list_tables
-  tools.unshift({
-    name: "list_tables",
-    description: "Lists all available tables in the database.",
-    input_schema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
-  });
+    tools.push({
+      name: `create_${tablename}`,
+      description: `Creates a new record in ${tablename}. Available columns: ${colList}.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          data: {
+            type: "object",
+            description: `Data to insert into ${tablename}. Use exact column names: ${colList}`,
+          },
+        },
+        required: ["data"],
+      },
+    });
+
+    tools.push({
+      name: `update_${tablename}`,
+      description: `Updates a record in ${tablename} by id. Available columns: ${colList}.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Record ID to update" },
+          data: {
+            type: "object",
+            description: `Fields to update in ${tablename}. Use exact column names: ${colList}`,
+          },
+        },
+        required: ["id", "data"],
+      },
+    });
+
+    tools.push({
+      name: `delete_${tablename}`,
+      description: `Deletes a record from ${tablename} by id.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Record ID to delete" },
+        },
+        required: ["id"],
+      },
+    });
+  }
 
   return tools;
 }
 
 // ── Tool Execution ────────────────────────────────────────────────
-// All tool calls use the authenticated client so RLS applies
-// and the database treats the request as the logged-in user.
 
 export async function executeTool(
   name: string,
@@ -170,9 +127,7 @@ export async function executeTool(
   const client = await getAuthenticatedClient();
 
   if (name === "list_tables") {
-    const { data, error } = await client.rpc("list_public_tables");
-    if (error) return JSON.stringify({ error: error.message });
-    return JSON.stringify({ tables: data?.map((t: any) => t.table_name) });
+    return JSON.stringify({ tables: Object.keys(RUNTIME_SCHEMA) });
   }
 
   const match = name.match(/^(query|create|update|delete)_(.+)$/);

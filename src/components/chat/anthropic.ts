@@ -1,10 +1,11 @@
 // ── Anthropic API ─────────────────────────────────────────────────
 // Handles all communication with the Claude API.
-// Builds system prompts including live schema info and personality.
+// Builds system prompts using RUNTIME_SCHEMA from virtual:schema.
 // In dev: routes through Vite proxy to avoid CORS.
 // In prod: routes through the PHP gateway proxy.
 
-import type { ColumnInfo } from "./supabase";
+import type { IATool } from "./supabase";
+import { RUNTIME_SCHEMA } from "virtual:schema";
 
 const ANTHROPIC_API_URL = import.meta.env.DEV
   ? "/anthropic/v1/messages"
@@ -35,11 +36,10 @@ export async function fetchClaude(
 // ── System prompt ─────────────────────────────────────────────────
 
 export function buildSystemPrompt(
-  tools: Array<{ name: string; description: string }>,
-  schema: ColumnInfo[],
+  tools: IATool[],
   personality: string = "",
 ): string {
-  // Build capability section from tools
+  // Capability section
   const tableMap: Record<string, string[]> = {};
   for (const tool of tools) {
     if (tool.name === "list_tables") continue;
@@ -62,27 +62,18 @@ export function buildSystemPrompt(
     .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  // Build schema section so Claude knows exact column names
-  const schemaByTable: Record<string, ColumnInfo[]> = {};
-  for (const col of schema) {
-    if (!schemaByTable[col.table_name]) schemaByTable[col.table_name] = [];
-    schemaByTable[col.table_name].push(col);
-  }
-
-  const schemaLines = Object.entries(schemaByTable)
-    .map(([table, cols]) => {
-      const colList = cols
-        .map((c) => `    ${c.column_name} (${c.data_type})`)
-        .join("\n");
-      return `  ${table}:\n${colList}`;
-    })
+  // Schema section — column names from RUNTIME_SCHEMA
+  const schemaLines = Object.entries(RUNTIME_SCHEMA)
+    .map(
+      ([table, columns]) => `  ${table}: ${(columns as string[]).join(", ")}`,
+    )
     .join("\n");
 
   const personalitySection = personality
     ? `## Personality\n${personality}\n`
     : "";
 
-  return `You are an IA (Information Agent). You help users interact with their data.
+  const result = `You are an IA (Information Agent). You help users interact with their data.
 You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
 You can also answer general knowledge questions — you are not limited to data only.
 
@@ -100,7 +91,7 @@ ${capabilityLines}
 What would you like to do?
 
 ## Database schema
-The following tables and columns exist. Always use these exact column names when creating or updating records:
+Always use these exact column names:
 
 ${schemaLines}
 
@@ -110,4 +101,5 @@ Use the exact column names from the schema above — never guess or rename them.
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
 If you are unsure what the user wants, ask a clarifying question.`;
+  return result;
 }

@@ -1,27 +1,17 @@
 // ── IA Orchestrator ───────────────────────────────────────────────
 // Manages the read → act → reply loop between Claude and Supabase.
-// Loads tools and schema dynamically from the database on each run.
+// Schema automatically extracted from src/schema.ts at build time.
 // Accepts an optional personality string injected into the system prompt.
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { fetchClaude, buildSystemPrompt } from "./anthropic";
-import {
-  buildToolsFromPolicies,
-  executeTool,
-  getTableSchema,
-} from "./supabase";
+import { buildToolsFromSchema, executeTool } from "./supabase";
 
 export function createIAModelAdapter(personality: string): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
-      // Load tools and schema dynamically from the database
-      const [tools, schema] = await Promise.all([
-        buildToolsFromPolicies(),
-        getTableSchema(),
-      ]);
-
-      // System prompt includes capability format + full schema + personality
-      const systemPrompt = buildSystemPrompt(tools, schema, personality);
+      const tools = buildToolsFromSchema();
+      const systemPrompt = buildSystemPrompt(tools, personality);
 
       const formattedMessages = messages.map((m) => ({
         role: m.role,
@@ -31,7 +21,6 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           .join(" "),
       }));
 
-      // First call — Claude decides whether to use a tool or reply directly
       const data = await fetchClaude(
         {
           model: "claude-sonnet-4-5",
@@ -43,7 +32,6 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         abortSignal,
       );
 
-      // ── read → act → reply loop ───────────────────────────────────
       if (data.stop_reason === "tool_use") {
         const toolUseBlock = data.content.find(
           (b: any) => b.type === "tool_use",
