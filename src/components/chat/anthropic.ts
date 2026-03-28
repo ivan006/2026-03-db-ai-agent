@@ -4,7 +4,7 @@
 // In dev: routes through Vite proxy to avoid CORS.
 // In prod: routes through the PHP gateway proxy.
 
-import type { IATool } from "./supabase";
+import type { IATool, SessionUser } from "./supabase";
 import { RUNTIME_SCHEMA } from "./schema-parser";
 
 const ANTHROPIC_API_URL = import.meta.env.DEV
@@ -38,6 +38,7 @@ export async function fetchClaude(
 export function buildSystemPrompt(
   tools: IATool[],
   personality: string = "",
+  user: SessionUser | null = null,
 ): string {
   const tableMap: Record<string, string[]> = {};
   for (const tool of tools) {
@@ -71,16 +72,23 @@ export function buildSystemPrompt(
     ? `## Personality\n${personality}\n`
     : "";
 
+  const userSection = user
+    ? `## Current user\nid: ${user.id}\nemail: ${user.email ?? "unknown"}${Object.keys(user.metadata).length ? `\nmetadata: ${JSON.stringify(user.metadata)}` : ""}\n`
+    : "";
+
   const result = `You are an IA (Information Agent). You help users interact with their data.
 You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
 You can also answer general knowledge questions — you are not limited to data only.
 
-${personalitySection}
+${userSection}${personalitySection}
 If anyone asks what you can do, your capabilities, or how you can help — respond in exactly this format, no emojis, no extra bullets, no extra text:
 
 Here's what I can help you with:
 
-**Tables:**
+**General:**
+  - List available tables
+
+**Data:**
 ${capabilityLines}
 
 What would you like to do?

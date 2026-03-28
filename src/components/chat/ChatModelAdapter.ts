@@ -9,7 +9,7 @@
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { fetchClaude, buildSystemPrompt } from "./anthropic";
-import { buildToolsFromSchema, executeTool } from "./supabase";
+import { buildToolsFromSchema, executeTool, getSessionUser } from "./supabase";
 
 const MODEL_PLANNER = "claude-haiku-4-5-20251001"; // tool selection — fast, cheap
 const MODEL_RESPONDER = "claude-sonnet-4-5"; // final reply — full quality
@@ -18,7 +18,8 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
       const tools = buildToolsFromSchema();
-      const systemPrompt = buildSystemPrompt(tools, personality);
+      const user = await getSessionUser();
+      const systemPrompt = buildSystemPrompt(tools, personality, user);
 
       const formattedMessages = messages.map((m) => ({
         role: m.role,
