@@ -35,32 +35,7 @@ export async function fetchClaude(
 export function buildSystemPrompt(
   tools: Array<{ name: string; description: string }>,
 ): string {
-  return `You are an IA (Information Agent). You help users interact with their data.
-When a user asks about data, use the available tools to query the database.
-When a user wants to create, update or delete something, use the appropriate tool.
-Then explain the results in plain, friendly language.
-Never show raw JSON or technical details — always interpret results naturally.
-If you are unsure what the user wants, ask a clarifying question.`;
-}
-
-// ── Capability interceptor ────────────────────────────────────────
-// Detects capability questions and formats the response directly
-// from the tools list — Claude never sees these questions.
-
-export const CAPABILITY_TRIGGERS = [
-  "what can you do",
-  "what do you do",
-  "help",
-  "capabilities",
-  "what are you able to do",
-  "what can you help with",
-  "what do you support",
-];
-
-export function buildCapabilityResponse(
-  tools: Array<{ name: string; description: string }>,
-): string {
-  // Group tools by table name
+  // Build the data section from actual tools
   const tableMap: Record<string, string[]> = {};
 
   for (const tool of tools) {
@@ -87,7 +62,11 @@ export function buildCapabilityResponse(
     .map(([table, actions]) => `  ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  return `Here's what I can help you with:
+  return `You are an IA (Information Agent). You help users interact with their data.
+
+If anyone asks what you can do, your capabilities, or how you can help — respond in exactly this format, no emojis, no extra bullets, no extra text:
+
+Here's what I can help you with:
 
 General
   List available tables
@@ -95,5 +74,11 @@ General
 Data
 ${tableLines}
 
-What would you like to do?`;
+What would you like to do?
+
+When a user asks about data, use the available tools to query the database.
+When a user wants to create, update or delete something, use the appropriate tool.
+Then explain the results in plain, friendly language.
+Never show raw JSON or technical details — always interpret results naturally.
+If you are unsure what the user wants, ask a clarifying question.`;
 }

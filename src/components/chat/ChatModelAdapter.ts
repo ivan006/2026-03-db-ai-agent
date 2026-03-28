@@ -1,15 +1,9 @@
 // ── IA Orchestrator ───────────────────────────────────────────────
 // Manages the read → act → reply loop between Claude and Supabase.
 // Loads tools dynamically from RLS policies on each run.
-// Delegates capability queries to the anthropic formatting layer.
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
-import {
-  fetchClaude,
-  buildSystemPrompt,
-  buildCapabilityResponse,
-  CAPABILITY_TRIGGERS,
-} from "./anthropic";
+import { fetchClaude, buildSystemPrompt } from "./anthropic";
 import { buildToolsFromPolicies, executeTool } from "./supabase";
 
 export const IAModelAdapter: ChatModelAdapter = {
@@ -17,7 +11,7 @@ export const IAModelAdapter: ChatModelAdapter = {
     // Load tools dynamically from database policies
     const tools = await buildToolsFromPolicies();
 
-    // System prompt built from actual tools
+    // System prompt includes capability format instructions
     const systemPrompt = buildSystemPrompt(tools);
 
     const formattedMessages = messages.map((m) => ({
@@ -27,24 +21,6 @@ export const IAModelAdapter: ChatModelAdapter = {
         .map((p) => p.text)
         .join(" "),
     }));
-
-    // Intercept capability queries — don't let Claude freestyle the format
-    const lastMessage = formattedMessages.at(-1)?.content.toLowerCase() ?? "";
-    const isCapabilityQuery = CAPABILITY_TRIGGERS.some((t) =>
-      lastMessage.includes(t),
-    );
-
-    if (isCapabilityQuery) {
-      yield {
-        content: [
-          {
-            type: "text" as const,
-            text: buildCapabilityResponse(tools),
-          },
-        ],
-      };
-      return;
-    }
 
     // First call — Claude decides whether to use a tool or reply directly
     const data = await fetchClaude(
@@ -67,13 +43,11 @@ export const IAModelAdapter: ChatModelAdapter = {
           content: [{ type: "text" as const, text: `_Working on it..._\n\n` }],
         };
 
-        // Execute the tool against Supabase
         const toolResult = await executeTool(
           toolUseBlock.name,
           toolUseBlock.input,
         );
 
-        // Send result back to Claude for plain language interpretation
         const followUpData = await fetchClaude(
           {
             model: "claude-sonnet-4-5",
@@ -106,7 +80,6 @@ export const IAModelAdapter: ChatModelAdapter = {
         yield { content: [{ type: "text" as const, text }] };
       }
     } else {
-      // Direct response — no tool needed
       const text = data.content
         .filter((b: any) => b.type === "text")
         .map((b: any) => b.text)
