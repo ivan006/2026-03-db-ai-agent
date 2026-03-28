@@ -59,19 +59,21 @@ export function buildSystemPrompt(
   }
 
   const tableLines = Object.entries(tableMap)
-    .map(([table, actions]) => `  ${table}: ${actions.join(", ")}`)
+    .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  return `You are an IA (Information Agent). You help users interact with their data.
+  const result = `You are an IA (Information Agent). You help users interact with their data.
 
 If anyone asks what you can do, your capabilities, or how you can help — respond in exactly this format, no emojis, no extra bullets, no extra text:
 
 Here's what I can help you with:
 
-General
-  List available tables
+**General:**
 
-Data
+- List available tables
+
+**Tables:**
+
 ${tableLines}
 
 What would you like to do?
@@ -81,4 +83,5 @@ When a user wants to create, update or delete something, use the appropriate too
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
 If you are unsure what the user wants, ask a clarifying question.`;
+  return result;
 }
