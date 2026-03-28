@@ -1,17 +1,26 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Thread } from "./Thread";
 import { MyRuntimeProvider } from "./MyRuntimeProvider";
-import { Settings, X } from "lucide-react";
+import { Settings, X, LogOut } from "lucide-react";
+import { supabase } from "./supabase";
 
-export function AssistantChat() {
-  const DEFAULT_PERSONALITY = `You can also answer general knowledge questions — you are not limited to data only.
+const DEFAULT_PERSONALITY = `You can also answer general knowledge questions — you are not limited to data only.
 
 You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
 
 Respond in a thick Jamaican patois dialect. Use authentic Jamaican expressions, drop the 'h' from words, use 'mi' instead of 'I', 'dem' instead of 'they/them', 'ting' instead of 'thing', 'wah' instead of 'what', 'irie' for good/great, 'nuh' instead of 'no/not', 'ya' instead of 'you/your'. Speak like a true Yardie.`;
+
+export function AssistantChat() {
+  const navigate = useNavigate();
   const [personality, setPersonality] = useState(DEFAULT_PERSONALITY);
   const [draft, setDraft] = useState(DEFAULT_PERSONALITY);
   const [panelOpen, setPanelOpen] = useState(false);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigate("/");
+  }
 
   function applyPersonality() {
     setPersonality(draft);
@@ -19,8 +28,8 @@ Respond in a thick Jamaican patois dialect. Use authentic Jamaican expressions, 
   }
 
   function clearPersonality() {
-    setDraft("");
-    setPersonality("");
+    setDraft(DEFAULT_PERSONALITY);
+    setPersonality(DEFAULT_PERSONALITY);
     setPanelOpen(false);
   }
 
@@ -47,8 +56,16 @@ Respond in a thick Jamaican patois dialect. Use authentic Jamaican expressions, 
               setPanelOpen(true);
             }}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            title="Personality settings"
           >
             <Settings className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
           </button>
         </header>
 
@@ -73,7 +90,7 @@ Respond in a thick Jamaican patois dialect. Use authentic Jamaican expressions, 
               onChange={(e) => setDraft(e.target.value)}
               placeholder='e.g. "Speak like a pirate" or "Be very formal and concise"'
               className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              rows={10}
+              rows={4}
             />
             <div className="flex gap-2 mt-2">
               <button
