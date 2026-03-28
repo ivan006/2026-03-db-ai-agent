@@ -1,9 +1,15 @@
 // ── IA Orchestrator ───────────────────────────────────────────────
 // Manages the read → act → reply loop between Claude and Supabase.
 // Loads tools dynamically from RLS policies on each run.
+// Delegates capability queries to the anthropic formatting layer.
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
-import { fetchClaude, buildSystemPrompt } from "./anthropic";
+import {
+  fetchClaude,
+  buildSystemPrompt,
+  buildCapabilityResponse,
+  CAPABILITY_TRIGGERS,
+} from "./anthropic";
 import { buildToolsFromPolicies, executeTool } from "./supabase";
 
 export const IAModelAdapter: ChatModelAdapter = {
@@ -21,6 +27,24 @@ export const IAModelAdapter: ChatModelAdapter = {
         .map((p) => p.text)
         .join(" "),
     }));
+
+    // Intercept capability queries — don't let Claude freestyle the format
+    const lastMessage = formattedMessages.at(-1)?.content.toLowerCase() ?? "";
+    const isCapabilityQuery = CAPABILITY_TRIGGERS.some((t) =>
+      lastMessage.includes(t),
+    );
+
+    if (isCapabilityQuery) {
+      yield {
+        content: [
+          {
+            type: "text" as const,
+            text: buildCapabilityResponse(tools),
+          },
+        ],
+      };
+      return;
+    }
 
     // First call — Claude decides whether to use a tool or reply directly
     const data = await fetchClaude(
