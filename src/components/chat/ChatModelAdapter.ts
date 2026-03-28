@@ -10,66 +10,105 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
 
-// ── IA Ability Layer ──────────────────────────────────────────────
-// These are the only operations the IA is allowed to perform.
-// Each tool maps directly to a Supabase JS call.
+// ── Dynamic Tool Generation ───────────────────────────────────────
+// Tools are generated from RLS policies in the database.
+// Adding a policy automatically adds the corresponding IA tool.
+// Removing a policy removes the tool. No code changes needed.
 
-const IA_TOOLS = [
-  {
+type Policy = {
+  tablename: string;
+  cmd: string;
+  policyname: string;
+  qual: string | null;
+  with_check: string | null;
+};
+
+function cmdToToolName(cmd: string, tablename: string): string {
+  switch (cmd.toUpperCase()) {
+    case "SELECT":
+      return `query_${tablename}`;
+    case "INSERT":
+      return `create_${tablename}`;
+    case "UPDATE":
+      return `update_${tablename}`;
+    case "DELETE":
+      return `delete_${tablename}`;
+    default:
+      return `${cmd.toLowerCase()}_${tablename}`;
+  }
+}
+
+function cmdToDescription(cmd: string, tablename: string): string {
+  switch (cmd.toUpperCase()) {
+    case "SELECT":
+      return `Fetches records from the ${tablename} table. Supports optional filters.`;
+    case "INSERT":
+      return `Creates a new record in the ${tablename} table.`;
+    case "UPDATE":
+      return `Updates an existing record in the ${tablename} table.`;
+    case "DELETE":
+      return `Deletes a record from the ${tablename} table.`;
+    default:
+      return `Performs ${cmd} operation on the ${tablename} table.`;
+  }
+}
+
+async function buildToolsFromPolicies() {
+  const { data, error } = await supabase.rpc("get_ia_tools");
+
+  if (error || !data) {
+    console.error("Failed to load IA tools from policies:", error?.message);
+    return { tools: [], policyMap: [] as Policy[] };
+  }
+
+  const policies: Policy[] = data;
+
+  // Deduplicate — one tool per table+cmd combination
+  const seen = new Set<string>();
+  const tools = [];
+
+  for (const policy of policies) {
+    const key = `${policy.tablename}_${policy.cmd}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    tools.push({
+      name: cmdToToolName(policy.cmd, policy.tablename),
+      description: cmdToDescription(policy.cmd, policy.tablename),
+      input_schema: {
+        type: "object",
+        properties: {
+          filters: {
+            type: "object",
+            description: `Optional key-value filters to apply to the ${policy.tablename} query`,
+          },
+          data: {
+            type: "object",
+            description: `Data payload for INSERT or UPDATE operations on ${policy.tablename}`,
+          },
+          id: {
+            type: "string",
+            description: `Record ID for UPDATE or DELETE operations on ${policy.tablename}`,
+          },
+        },
+        required: [],
+      },
+    });
+  }
+
+  // Always include list_tables
+  tools.unshift({
     name: "list_tables",
-    description:
-      "Lists all available tables in the database that the user can interact with.",
+    description: "Lists all available tables in the database.",
     input_schema: {
       type: "object",
       properties: {},
       required: [],
     },
-  },
-  {
-    name: "query_deals",
-    description:
-      "Fetches deals from the database. Can filter by status and/or minimum value.",
-    input_schema: {
-      type: "object",
-      properties: {
-        status: {
-          type: "string",
-          enum: ["open", "closed"],
-          description: "Filter deals by status",
-        },
-        min_value: {
-          type: "number",
-          description:
-            "Filter deals with value greater than or equal to this amount",
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "create_deal",
-    description: "Creates a new deal in the database.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name: {
-          type: "string",
-          description: "The name of the deal or company",
-        },
-        status: {
-          type: "string",
-          enum: ["open", "closed"],
-          description: "The status of the deal",
-        },
-        value: {
-          type: "number",
-          description: "The monetary value of the deal",
-        },
-      },
-      required: ["name"],
-    },
-  },
-];
+  });
+
+  return { tools, policyMap: policies };
+}
 
 // ── Tool Execution ────────────────────────────────────────────────
 
@@ -77,44 +116,65 @@ async function executeTool(
   name: string,
   input: Record<string, unknown>,
 ): Promise<string> {
-  switch (name) {
-    case "list_tables": {
-      const { data, error } = await supabase.rpc("list_public_tables");
-      if (error) return JSON.stringify({ error: error.message });
-      return JSON.stringify({ tables: data?.map((t: any) => t.table_name) });
-    }
-    case "query_deals": {
-      let query = supabase.from("deals").select("*");
+  // list_tables
+  if (name === "list_tables") {
+    const { data, error } = await supabase.rpc("list_public_tables");
+    if (error) return JSON.stringify({ error: error.message });
+    return JSON.stringify({ tables: data?.map((t: any) => t.table_name) });
+  }
 
-      if (input.status) {
-        query = query.eq("status", input.status as string);
-      }
-      if (input.min_value !== undefined) {
-        query = query.gte("value", input.min_value as number);
-      }
+  // Parse tool name — e.g. query_deals, create_deals, update_deals, delete_deals
+  const match = name.match(/^(query|create|update|delete)_(.+)$/);
+  if (!match) return JSON.stringify({ error: `Unknown tool: ${name}` });
 
+  const [, cmd, tablename] = match;
+
+  switch (cmd) {
+    case "query": {
+      let query = supabase.from(tablename).select("*");
+      const filters = input.filters as Record<string, unknown> | undefined;
+      if (filters) {
+        for (const [key, value] of Object.entries(filters)) {
+          query = query.eq(key, value as string);
+        }
+      }
       const { data, error } = await query;
       if (error) return JSON.stringify({ error: error.message });
-      return JSON.stringify({ deals: data });
+      return JSON.stringify({ [tablename]: data });
     }
 
-    case "create_deal": {
+    case "create": {
       const { data, error } = await supabase
-        .from("deals")
-        .insert({
-          name: input.name as string,
-          status: (input.status as string) ?? "open",
-          value: input.value as number,
-        })
+        .from(tablename)
+        .insert(input.data as object)
         .select()
         .single();
-
       if (error) return JSON.stringify({ error: error.message });
-      return JSON.stringify({ deal: data });
+      return JSON.stringify({ [tablename]: data });
+    }
+
+    case "update": {
+      const { data, error } = await supabase
+        .from(tablename)
+        .update(input.data as object)
+        .eq("id", input.id as string)
+        .select()
+        .single();
+      if (error) return JSON.stringify({ error: error.message });
+      return JSON.stringify({ [tablename]: data });
+    }
+
+    case "delete": {
+      const { error } = await supabase
+        .from(tablename)
+        .delete()
+        .eq("id", input.id as string);
+      if (error) return JSON.stringify({ error: error.message });
+      return JSON.stringify({ success: true });
     }
 
     default:
-      return JSON.stringify({ error: `Unknown tool: ${name}` });
+      return JSON.stringify({ error: `Unknown command: ${cmd}` });
   }
 }
 
@@ -139,7 +199,7 @@ async function fetchClaude(body: object, abortSignal?: AbortSignal) {
 
 const SYSTEM_PROMPT = `You are an IA (Information Agent). You help users interact with their data.
 When a user asks about data, use the available tools to query the database.
-When a user wants to create or add something, use the appropriate create tool.
+When a user wants to create, update or delete something, use the appropriate tool.
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
 If you are unsure what the user wants, ask a clarifying question.`;
@@ -148,6 +208,9 @@ If you are unsure what the user wants, ask a clarifying question.`;
 
 export const IAModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
+    // Load tools dynamically from database policies
+    const { tools } = await buildToolsFromPolicies();
+
     const formattedMessages = messages.map((m) => ({
       role: m.role,
       content: m.content
@@ -162,7 +225,7 @@ export const IAModelAdapter: ChatModelAdapter = {
         model: "claude-sonnet-4-5",
         max_tokens: 1000,
         system: SYSTEM_PROMPT,
-        tools: IA_TOOLS,
+        tools,
         messages: formattedMessages,
       },
       abortSignal,
@@ -194,7 +257,7 @@ export const IAModelAdapter: ChatModelAdapter = {
             model: "claude-sonnet-4-5",
             max_tokens: 1000,
             system: SYSTEM_PROMPT,
-            tools: IA_TOOLS,
+            tools,
             messages: [
               ...formattedMessages,
               { role: "assistant", content: data.content },
