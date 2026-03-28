@@ -1,10 +1,11 @@
 // ── Supabase ──────────────────────────────────────────────────────
 // Handles all communication with the Supabase database.
-// Schema is automatically extracted from src/schema.ts at build time
-// via the vite-plugin-schema Vite plugin — no manual config needed.
+// Uses the authenticated user's session token for all requests
+// so RLS treats every call as that specific user.
+// Schema is parsed from src/schema.ts at build time via schema-parser.ts
 
 import { createClient } from "@supabase/supabase-js";
-import { RUNTIME_SCHEMA } from "virtual:schema";
+import { RUNTIME_SCHEMA } from "./schema-parser";
 
 // Base client — used for auth operations only
 export const supabase = createClient(
@@ -35,8 +36,6 @@ export async function getAuthenticatedClient() {
 }
 
 // ── Tool generation ───────────────────────────────────────────────
-// RUNTIME_SCHEMA is a plain object: { tableName: ["col1", "col2", ...] }
-// Automatically extracted from src/schema.ts by vite-plugin-schema
 
 export type IATool = {
   name: string;

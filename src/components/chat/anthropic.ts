@@ -1,11 +1,11 @@
 // ── Anthropic API ─────────────────────────────────────────────────
 // Handles all communication with the Claude API.
-// Builds system prompts using RUNTIME_SCHEMA from virtual:schema.
+// Builds system prompts using RUNTIME_SCHEMA from schema-parser.ts
 // In dev: routes through Vite proxy to avoid CORS.
 // In prod: routes through the PHP gateway proxy.
 
 import type { IATool } from "./supabase";
-import { RUNTIME_SCHEMA } from "virtual:schema";
+import { RUNTIME_SCHEMA } from "./schema-parser";
 
 const ANTHROPIC_API_URL = import.meta.env.DEV
   ? "/anthropic/v1/messages"
@@ -39,7 +39,6 @@ export function buildSystemPrompt(
   tools: IATool[],
   personality: string = "",
 ): string {
-  // Capability section
   const tableMap: Record<string, string[]> = {};
   for (const tool of tools) {
     if (tool.name === "list_tables") continue;
@@ -62,7 +61,6 @@ export function buildSystemPrompt(
     .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  // Schema section — column names from RUNTIME_SCHEMA
   const schemaLines = Object.entries(RUNTIME_SCHEMA)
     .map(
       ([table, columns]) => `  ${table}: ${(columns as string[]).join(", ")}`,
@@ -73,7 +71,7 @@ export function buildSystemPrompt(
     ? `## Personality\n${personality}\n`
     : "";
 
-  const result = `You are an IA (Information Agent). You help users interact with their data.
+  return `You are an IA (Information Agent). You help users interact with their data.
 You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
 You can also answer general knowledge questions — you are not limited to data only.
 
@@ -101,5 +99,4 @@ Use the exact column names from the schema above — never guess or rename them.
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
 If you are unsure what the user wants, ask a clarifying question.`;
-  return result;
 }
