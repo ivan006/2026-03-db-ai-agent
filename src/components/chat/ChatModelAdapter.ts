@@ -80,29 +80,9 @@ async function executeTool(
   switch (name) {
     case "list_tables": {
       const { data, error } = await supabase.rpc("list_public_tables");
-
-      if (error) {
-        // Fallback — query information_schema directly
-        const { data: schemaData, error: schemaError } = await supabase
-          .from("information_schema.tables" as any)
-          .select("table_name")
-          .eq("table_schema", "public")
-          .eq("table_type", "BASE TABLE");
-
-        if (schemaError) {
-          // Last resort — return known tables from ability layer
-          const known = ["deals"];
-          return JSON.stringify({ tables: known });
-        }
-
-        return JSON.stringify({
-          tables: schemaData?.map((t: any) => t.table_name),
-        });
-      }
-
-      return JSON.stringify({ tables: data });
+      if (error) return JSON.stringify({ error: error.message });
+      return JSON.stringify({ tables: data?.map((t: any) => t.table_name) });
     }
-
     case "query_deals": {
       let query = supabase.from("deals").select("*");
 
