@@ -3,21 +3,57 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/components/chat/supabase";
 
 type Step = "idle" | "loading" | "success" | "error";
+type Mode = "signin" | "signup";
 
 export default function Login() {
   const navigate = useNavigate();
 
+  const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [supabaseStep, setSupabaseStep] = useState<Step>("idle");
   const [awsStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setSupabaseStep("loading");
+  function switchMode(newMode: Mode) {
+    setMode(newMode);
     setErrorMsg("");
+    setSuccessMsg("");
+    setSupabaseStep("idle");
+    setConfirmPassword("");
+  }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrorMsg("");
+    setSuccessMsg("");
+    setSupabaseStep("loading");
+
+    if (mode === "signup") {
+      if (password !== confirmPassword) {
+        setErrorMsg("Passwords do not match");
+        setSupabaseStep("error");
+        return;
+      }
+
+      const { error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        setSupabaseStep("error");
+        setErrorMsg(error.message);
+        return;
+      }
+
+      setSupabaseStep("success");
+      setSuccessMsg(
+        "Account created! Check your email to confirm, then sign in.",
+      );
+      return;
+    }
+
+    // Sign in
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -30,11 +66,7 @@ export default function Login() {
     }
 
     setSupabaseStep("success");
-
-    // AWS gateway is placeholder — bypass for now
-    setTimeout(() => {
-      navigate("/chat");
-    }, 800);
+    setTimeout(() => navigate("/chat"), 800);
   }
 
   function StepIndicator({ step, label }: { step: Step; label: string }) {
@@ -45,9 +77,7 @@ export default function Login() {
             ? "text-green-600"
             : step === "error"
               ? "text-destructive"
-              : step === "loading"
-                ? "text-muted-foreground"
-                : "text-muted-foreground"
+              : "text-muted-foreground"
         }`}
       >
         <div
@@ -66,7 +96,7 @@ export default function Login() {
             : step === "error"
               ? "✗"
               : step === "loading"
-                ? "..."
+                ? "…"
                 : "○"}
         </div>
         {label}
@@ -97,18 +127,44 @@ export default function Login() {
           <StepIndicator step={awsStep} label="AI access" />
         </div>
 
-        {/* Supabase login form */}
+        {/* Supabase auth form */}
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <div className="mb-4">
-            <p className="text-sm font-medium text-foreground">
-              Step 1 — Data access
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Sign in with your Supabase credentials
-            </p>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Step 1 — Data access
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {mode === "signin"
+                  ? "Sign in to your account"
+                  : "Create a new account"}
+              </p>
+            </div>
+            <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+              <button
+                onClick={() => switchMode("signin")}
+                className={`px-3 py-1.5 transition-colors ${
+                  mode === "signin"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => switchMode("signup")}
+                className={`px-3 py-1.5 transition-colors ${
+                  mode === "signup"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Register
+              </button>
+            </div>
           </div>
 
-          <form onSubmit={handleLogin} className="flex flex-col gap-3">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <input
               type="email"
               placeholder="Email"
@@ -125,7 +181,20 @@ export default function Login() {
               required
               className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
+            {mode === "signup" && (
+              <input
+                type="password"
+                placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            )}
             {errorMsg && <p className="text-xs text-destructive">{errorMsg}</p>}
+            {successMsg && (
+              <p className="text-xs text-green-600">{successMsg}</p>
+            )}
             <button
               type="submit"
               disabled={
@@ -134,10 +203,16 @@ export default function Login() {
               className="mt-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
               {supabaseStep === "loading"
-                ? "Signing in..."
+                ? mode === "signup"
+                  ? "Creating account..."
+                  : "Signing in..."
                 : supabaseStep === "success"
-                  ? "Signed in ✓"
-                  : "Sign in"}
+                  ? mode === "signup"
+                    ? "Account created ✓"
+                    : "Signed in ✓"
+                  : mode === "signup"
+                    ? "Create account"
+                    : "Sign in"}
             </button>
           </form>
         </div>

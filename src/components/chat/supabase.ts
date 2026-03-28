@@ -1,16 +1,41 @@
 // ── Supabase ──────────────────────────────────────────────────────
 // Handles all communication with the Supabase database.
+// Uses the authenticated user's session token for all requests
+// so RLS treats every call as that specific user.
 // Loads tools dynamically from RLS policies.
 // Loads schema info (column names and types) for each table.
-// Executes tool calls under the user's session (anon key for now,
-// user JWT once auth is added).
 
 import { createClient } from "@supabase/supabase-js";
 
+// Base client — used for auth operations only
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
 );
+
+// ── Authenticated client ──────────────────────────────────────────
+// Returns a Supabase client authenticated as the logged-in user.
+// RLS policies apply based on auth.uid() from their session token.
+
+export async function getAuthenticatedClient() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) return supabase; // fallback to anon if not logged in
+
+  return createClient(
+    import.meta.env.VITE_SUPABASE_URL,
+    import.meta.env.VITE_SUPABASE_ANON_KEY,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      },
+    },
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -32,7 +57,8 @@ export type ColumnInfo = {
 // ── Schema fetching ───────────────────────────────────────────────
 
 export async function getTableSchema(): Promise<ColumnInfo[]> {
-  const { data, error } = await supabase.rpc("get_table_columns");
+  const client = await getAuthenticatedClient();
+  const { data, error } = await client.rpc("get_table_columns");
   if (error || !data) {
     console.error("Failed to load table schema:", error?.message);
     return [];
@@ -76,7 +102,8 @@ function cmdToDescription(cmd: string, tablename: string): string {
 }
 
 export async function buildToolsFromPolicies() {
-  const { data, error } = await supabase.rpc("get_ia_tools");
+  const client = await getAuthenticatedClient();
+  const { data, error } = await client.rpc("get_ia_tools");
 
   if (error || !data) {
     console.error("Failed to load IA tools from policies:", error?.message);
@@ -133,13 +160,17 @@ export async function buildToolsFromPolicies() {
 }
 
 // ── Tool Execution ────────────────────────────────────────────────
+// All tool calls use the authenticated client so RLS applies
+// and the database treats the request as the logged-in user.
 
 export async function executeTool(
   name: string,
   input: Record<string, unknown>,
 ): Promise<string> {
+  const client = await getAuthenticatedClient();
+
   if (name === "list_tables") {
-    const { data, error } = await supabase.rpc("list_public_tables");
+    const { data, error } = await client.rpc("list_public_tables");
     if (error) return JSON.stringify({ error: error.message });
     return JSON.stringify({ tables: data?.map((t: any) => t.table_name) });
   }
@@ -151,7 +182,7 @@ export async function executeTool(
 
   switch (cmd) {
     case "query": {
-      let query = supabase.from(tablename).select("*");
+      let query = client.from(tablename).select("*");
       const filters = input.filters as Record<string, unknown> | undefined;
       if (filters) {
         for (const [key, value] of Object.entries(filters)) {
@@ -164,7 +195,7 @@ export async function executeTool(
     }
 
     case "create": {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(tablename)
         .insert(input.data as object)
         .select()
@@ -174,7 +205,7 @@ export async function executeTool(
     }
 
     case "update": {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from(tablename)
         .update(input.data as object)
         .eq("id", input.id as string)
@@ -185,7 +216,7 @@ export async function executeTool(
     }
 
     case "delete": {
-      const { error } = await supabase
+      const { error } = await client
         .from(tablename)
         .delete()
         .eq("id", input.id as string);
