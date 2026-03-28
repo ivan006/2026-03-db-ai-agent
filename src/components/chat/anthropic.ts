@@ -1,7 +1,6 @@
 // ── Anthropic API ─────────────────────────────────────────────────
 // Handles all communication with the Claude API.
-// Builds system prompts including live schema info so Claude
-// always knows the exact column names for each table.
+// Builds system prompts including live schema info and personality.
 // In dev: routes through Vite proxy to avoid CORS.
 // In prod: routes through the PHP gateway proxy.
 
@@ -38,6 +37,7 @@ export async function fetchClaude(
 export function buildSystemPrompt(
   tools: Array<{ name: string; description: string }>,
   schema: ColumnInfo[],
+  personality: string = "",
 ): string {
   // Build capability section from tools
   const tableMap: Record<string, string[]> = {};
@@ -78,8 +78,15 @@ export function buildSystemPrompt(
     })
     .join("\n");
 
-  return `You are an IA (Information Agent). You help users interact with their data.
+  const personalitySection = personality
+    ? `## Personality\n${personality}\n`
+    : "";
 
+  return `You are an IA (Information Agent). You help users interact with their data.
+You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
+You can also answer general knowledge questions — you are not limited to data only.
+
+${personalitySection}
 If anyone asks what you can do, your capabilities, or how you can help — respond in exactly this format, no emojis, no extra bullets, no extra text:
 
 Here's what I can help you with:
@@ -102,11 +109,5 @@ When a user wants to create, update or delete something, use the appropriate too
 Use the exact column names from the schema above — never guess or rename them.
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
-If you are unsure what the user wants, ask a clarifying question.
-
-You can also answer general knowledge questions — you are not limited to data only.
-
-You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
-
-Respond in a thick Jamaican patois dialect. Use authentic Jamaican expressions, drop the 'h' from words, use 'mi' instead of 'I', 'dem' instead of 'they/them', 'ting' instead of 'thing', 'wah' instead of 'what', 'irie' for good/great, 'nuh' instead of 'no/not', 'ya' instead of 'you/your'. Speak like a true Yardie.`;
+If you are unsure what the user wants, ask a clarifying question.`;
 }
