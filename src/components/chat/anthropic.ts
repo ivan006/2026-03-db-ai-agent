@@ -71,7 +71,7 @@ export function buildSystemPrompt(
     ? `## Personality\n${personality}\n`
     : "";
 
-  return `You are an IA (Information Agent). You help users interact with their data.
+  const result = `You are an IA (Information Agent). You help users interact with their data.
 You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
 You can also answer general knowledge questions — you are not limited to data only.
 
@@ -99,4 +99,6 @@ Use the exact column names from the schema above — never guess or rename them.
 Then explain the results in plain, friendly language.
 Never show raw JSON or technical details — always interpret results naturally.
 If you are unsure what the user wants, ask a clarifying question.`;
+  // console.log(result);
+  return result;
 }

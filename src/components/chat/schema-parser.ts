@@ -3,7 +3,8 @@
 // import.meta.glob with { as: 'raw' } — no manual edits needed.
 // Extracts table names and column names from the Database type.
 
-const modules = import.meta.glob("/src/schema.ts", { as: "raw", eager: true });
+const modules = import.meta.glob("/schema.ts", { as: "raw", eager: true });
+
 const raw = (Object.values(modules)[0] as string) ?? "";
 
 function extractSchema(schemaContent: string): Record<string, string[]> {
@@ -36,4 +37,6 @@ function extractSchema(schemaContent: string): Record<string, string[]> {
   return schema;
 }
 
+// console.log("[IA] raw length:", raw.length);
 export const RUNTIME_SCHEMA = extractSchema(raw);
+// console.log("[IA] RUNTIME_SCHEMA:", RUNTIME_SCHEMA);
