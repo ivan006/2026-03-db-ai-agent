@@ -27,3 +27,4 @@ dist-ssr
 .env.production
 .env.development.old
 src/types/database.types.ts
+schema.js
