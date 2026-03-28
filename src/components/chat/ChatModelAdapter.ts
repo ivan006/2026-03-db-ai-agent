@@ -1,18 +1,25 @@
 // ── IA Orchestrator ───────────────────────────────────────────────
 // Manages the read → act → reply loop between Claude and Supabase.
-// Loads tools dynamically from RLS policies on each run.
+// Loads tools and schema dynamically from the database on each run.
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { fetchClaude, buildSystemPrompt } from "./anthropic";
-import { buildToolsFromPolicies, executeTool } from "./supabase";
+import {
+  buildToolsFromPolicies,
+  executeTool,
+  getTableSchema,
+} from "./supabase";
 
 export const IAModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
-    // Load tools dynamically from database policies
-    const tools = await buildToolsFromPolicies();
+    // Load tools and schema dynamically from the database
+    const [tools, schema] = await Promise.all([
+      buildToolsFromPolicies(),
+      getTableSchema(),
+    ]);
 
-    // System prompt includes capability format instructions
-    const systemPrompt = buildSystemPrompt(tools);
+    // System prompt includes capability format + full schema
+    const systemPrompt = buildSystemPrompt(tools, schema);
 
     const formattedMessages = messages.map((m) => ({
       role: m.role,

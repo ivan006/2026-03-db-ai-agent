@@ -1,6 +1,7 @@
 // ── Supabase ──────────────────────────────────────────────────────
 // Handles all communication with the Supabase database.
 // Loads tools dynamically from RLS policies.
+// Loads schema info (column names and types) for each table.
 // Executes tool calls under the user's session (anon key for now,
 // user JWT once auth is added).
 
@@ -20,6 +21,24 @@ type Policy = {
   qual: string | null;
   with_check: string | null;
 };
+
+export type ColumnInfo = {
+  table_name: string;
+  column_name: string;
+  data_type: string;
+  is_nullable: string;
+};
+
+// ── Schema fetching ───────────────────────────────────────────────
+
+export async function getTableSchema(): Promise<ColumnInfo[]> {
+  const { data, error } = await supabase.rpc("get_table_columns");
+  if (error || !data) {
+    console.error("Failed to load table schema:", error?.message);
+    return [];
+  }
+  return data as ColumnInfo[];
+}
 
 // ── Tool generation from RLS policies ────────────────────────────
 // The database policies ARE the ability layer.
