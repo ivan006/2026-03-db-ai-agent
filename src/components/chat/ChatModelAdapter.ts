@@ -2,10 +2,17 @@
 // Manages the read → act → reply loop between Claude and Supabase.
 // Schema automatically extracted from src/schema.ts at build time.
 // Accepts an optional personality string injected into the system prompt.
+//
+// Two-model strategy:
+//   Haiku  — tool planning (deciding which tools to call, low token cost)
+//   Sonnet — final reply to user (natural language, personality, reasoning)
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { fetchClaude, buildSystemPrompt } from "./anthropic";
 import { buildToolsFromSchema, executeTool } from "./supabase";
+
+const MODEL_PLANNER = "claude-haiku-4-5-20251001"; // tool selection — fast, cheap
+const MODEL_RESPONDER = "claude-sonnet-4-5"; // final reply — full quality
 
 export function createIAModelAdapter(personality: string): ChatModelAdapter {
   return {
@@ -21,10 +28,11 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           .join(" "),
       }));
 
+      // Haiku decides which tools to call — low token cost
       const data = await fetchClaude(
         {
-          model: "claude-sonnet-4-5",
-          max_tokens: 1000,
+          model: MODEL_PLANNER,
+          max_tokens: 400,
           system: systemPrompt,
           tools,
           messages: formattedMessages,
@@ -56,9 +64,10 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             }),
           );
 
+          // Sonnet composes the final reply with full reasoning and personality
           const followUpData = await fetchClaude(
             {
-              model: "claude-sonnet-4-5",
+              model: MODEL_RESPONDER,
               max_tokens: 1000,
               system: systemPrompt,
               tools,
@@ -82,7 +91,19 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           yield { content: [{ type: "text" as const, text }] };
         }
       } else {
-        const text = data.content
+        // No tools needed — Haiku already has the answer, but re-ask Sonnet
+        // so personality and response quality are consistent across all paths.
+        const replyData = await fetchClaude(
+          {
+            model: MODEL_RESPONDER,
+            max_tokens: 1000,
+            system: systemPrompt,
+            messages: formattedMessages,
+          },
+          abortSignal,
+        );
+
+        const text = replyData.content
           .filter((b: any) => b.type === "text")
           .map((b: any) => b.text)
           .join("");
