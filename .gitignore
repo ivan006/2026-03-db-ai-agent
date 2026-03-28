@@ -31,3 +31,4 @@ schema.js
 schema.ts
 schema.json
 schema.json.old
+.env.production.old

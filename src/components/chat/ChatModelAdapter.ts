@@ -33,20 +33,27 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
       );
 
       if (data.stop_reason === "tool_use") {
-        const toolUseBlock = data.content.find(
+        const toolUseBlocks = data.content.filter(
           (b: any) => b.type === "tool_use",
         );
 
-        if (toolUseBlock) {
+        if (toolUseBlocks.length > 0) {
           yield {
             content: [
               { type: "text" as const, text: `_Working on it..._\n\n` },
             ],
           };
 
-          const toolResult = await executeTool(
-            toolUseBlock.name,
-            toolUseBlock.input,
+          // Execute all tool calls in parallel
+          const toolResults = await Promise.all(
+            toolUseBlocks.map(async (block: any) => {
+              const result = await executeTool(block.name, block.input);
+              return {
+                type: "tool_result" as const,
+                tool_use_id: block.id,
+                content: result,
+              };
+            }),
           );
 
           const followUpData = await fetchClaude(
@@ -60,13 +67,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
                 { role: "assistant", content: data.content },
                 {
                   role: "user",
-                  content: [
-                    {
-                      type: "tool_result",
-                      tool_use_id: toolUseBlock.id,
-                      content: toolResult,
-                    },
-                  ],
+                  content: toolResults,
                 },
               ],
             },
