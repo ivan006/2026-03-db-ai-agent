@@ -53,12 +53,28 @@ function cmdToDescription(cmd: string, tablename: string): string {
   }
 }
 
+function cmdToHumanLabel(cmd: string, tablename: string): string {
+  const table = tablename.replace(/_/g, " ");
+  switch (cmd.toUpperCase()) {
+    case "SELECT":
+      return `View ${table} — search and filter your ${table}`;
+    case "INSERT":
+      return `Create a ${table.replace(/s$/, "")} — add a new ${table.replace(/s$/, "")} to the database`;
+    case "UPDATE":
+      return `Update a ${table.replace(/s$/, "")} — modify an existing ${table.replace(/s$/, "")}`;
+    case "DELETE":
+      return `Delete a ${table.replace(/s$/, "")} — remove a ${table.replace(/s$/, "")} from the database`;
+    default:
+      return `${cmd} ${table}`;
+  }
+}
+
 async function buildToolsFromPolicies() {
   const { data, error } = await supabase.rpc("get_ia_tools");
 
   if (error || !data) {
     console.error("Failed to load IA tools from policies:", error?.message);
-    return { tools: [], policyMap: [] as Policy[] };
+    return { tools: [], humanLabels: [] as string[] };
   }
 
   const policies: Policy[] = data;
@@ -66,6 +82,7 @@ async function buildToolsFromPolicies() {
   // Deduplicate — one tool per table+cmd combination
   const seen = new Set<string>();
   const tools = [];
+  const humanLabels: string[] = [];
 
   for (const policy of policies) {
     const key = `${policy.tablename}_${policy.cmd}`;
@@ -94,6 +111,8 @@ async function buildToolsFromPolicies() {
         required: [],
       },
     });
+
+    humanLabels.push(cmdToHumanLabel(policy.cmd, policy.tablename));
   }
 
   // Always include list_tables
@@ -107,7 +126,9 @@ async function buildToolsFromPolicies() {
     },
   });
 
-  return { tools, policyMap: policies };
+  humanLabels.unshift("List tables — see what data is available");
+
+  return { tools, humanLabels };
 }
 
 // ── Tool Execution ────────────────────────────────────────────────
@@ -197,19 +218,32 @@ async function fetchClaude(body: object, abortSignal?: AbortSignal) {
   return response.json();
 }
 
-const SYSTEM_PROMPT = `You are an IA (Information Agent). You help users interact with their data.
-When a user asks about data, use the available tools to query the database.
-When a user wants to create, update or delete something, use the appropriate tool.
-Then explain the results in plain, friendly language.
-Never show raw JSON or technical details — always interpret results naturally.
-If you are unsure what the user wants, ask a clarifying question.`;
-
 // ── Adapter ───────────────────────────────────────────────────────
 
 export const IAModelAdapter: ChatModelAdapter = {
   async *run({ messages, abortSignal }) {
     // Load tools dynamically from database policies
-    const { tools } = await buildToolsFromPolicies();
+    const { tools, humanLabels } = await buildToolsFromPolicies();
+
+    // System prompt built from actual tools — no hardcoding
+    const SYSTEM_PROMPT = `You are an IA (Information Agent). You help users interact with their data.
+
+Your available abilities are:
+${humanLabels.map((label) => `- ${label}`).join("\n")}
+
+When asked what you can do, respond in exactly this format — no emojis, no nested bullets, no extra formatting:
+
+Here's what I can help you with:
+
+${humanLabels.map((label) => `${label}`).join("\n")}
+
+What would you like to do?
+
+When a user asks about data, use the available tools to query the database.
+When a user wants to create, update or delete something, use the appropriate tool.
+Then explain the results in plain, friendly language.
+Never show raw JSON or technical details — always interpret results naturally.
+If you are unsure what the user wants, ask a clarifying question.`;
 
     const formattedMessages = messages.map((m) => ({
       role: m.role,
