@@ -2,55 +2,45 @@
 
 ## Connecting your database
 
-### 1. Login to Supabase CLI
+### 1. Open the Supabase SQL Editor
 
-```bash
-npx supabase login
+In your Supabase project, go to **SQL Editor** and run:
+
+```sql
+SELECT json_object_agg(table_name, columns)
+FROM (
+  SELECT
+    table_name,
+    json_agg(column_name::text ORDER BY ordinal_position) AS columns
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+  GROUP BY table_name
+) t;
 ```
-
-This opens a browser window. Log in and paste the verification code back in the terminal.
 
 ---
 
-### 2. Export your schema
+### 2. Copy the result
 
-```bash
-npx supabase gen types typescript --project-id your-project-id
-```
-
-Find your project ID in the Supabase dashboard under **Project Settings → General → Project ID**.
-
----
-
-### 3. What to extract
-
-From the output, copy only the `Database` type object — everything from `export type Database = {` to its closing `}`.
+The query returns a single JSON object. Copy it.
 
 It looks like this:
 
-```typescript
-export type Database = {
-  public: {
-    Tables: {
-      your_table: {
-        Row: { ... }
-        Insert: { ... }
-        Update: { ... }
-      }
-    }
-    ...
-  }
+```json
+{
+  "users": ["id", "email", "created_at"],
+  "posts": ["id", "title", "body", "user_id"]
 }
 ```
 
 ---
 
-### 4. Where to put it
+### 3. Where to put it
 
 Paste it into:
 
 ```
-src/schema.js
+src/schema.json
 ```
 
-This file is gitignored. See `src/schema.js.example` for the expected structure.
+This file is gitignored. See `src/schema.json.example` for the expected structure.

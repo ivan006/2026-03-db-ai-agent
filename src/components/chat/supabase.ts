@@ -113,7 +113,7 @@ export function buildToolsFromSchema(): IATool[] {
       },
     });
   }
-  console.log(tools);
+  // console.log(tools);
   return tools;
 }
 

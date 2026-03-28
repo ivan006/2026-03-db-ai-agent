@@ -29,3 +29,5 @@ dist-ssr
 src/types/database.types.ts
 schema.js
 schema.ts
+schema.json
+schema.json.old

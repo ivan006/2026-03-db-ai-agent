@@ -1,0 +1,4 @@
+{
+  "users": ["id", "email", "created_at"],
+  "posts": ["id", "title", "body", "user_id"]
+}

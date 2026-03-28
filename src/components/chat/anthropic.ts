@@ -80,10 +80,7 @@ If anyone asks what you can do, your capabilities, or how you can help — respo
 
 Here's what I can help you with:
 
-**General:**
-  - List available tables
-
-**Data:**
+**Tables:**
 ${capabilityLines}
 
 What would you like to do?
