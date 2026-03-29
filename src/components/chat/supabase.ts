@@ -130,6 +130,7 @@ export async function executeTool(
       const filters = input.filters as Record<string, unknown> | undefined;
       if (filters) {
         for (const [key, value] of Object.entries(filters)) {
+          if (value === "" || value === null || value === undefined) continue;
           query = query.eq(key, value as string);
         }
       }
