@@ -49,7 +49,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         content: [
           {
             type: "text" as const,
-            text: step(`- 🤔 Hmmm...`),
+            text: step(`- 🤔 Ahhh...`),
           },
         ],
       };
@@ -162,7 +162,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             content: [
               {
                 type: "text" as const,
-                text: step(`- 🤔 Hmmm...`),
+                text: step(`- 🤔 Ahhh...`),
               },
             ],
           };
@@ -186,7 +186,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         content: [
           {
             type: "text" as const,
-            text: step("- 💬 How can I put this..."),
+            text: step("- 💬 Ummm..."),
           },
         ],
       };
