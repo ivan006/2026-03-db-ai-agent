@@ -1,8 +1,8 @@
 // ── Anthropic API ─────────────────────────────────────────────────
 // Handles all communication with the Claude API.
-// Builds system prompts from the pre-built tools array.
-// In dev: routes through Vite proxy to avoid CORS.
-// In prod: routes through the PHP gateway proxy.
+// Two system prompts:
+//   buildPlannerPrompt — terse, tool-focused, for Haiku
+//   buildResponderPrompt — full personality + schema, for Sonnet
 
 import type { IATool, SessionUser } from "./supabase";
 
@@ -32,14 +32,9 @@ export async function fetchClaude(
   return response.json();
 }
 
-// ── System prompt ─────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────
 
-export function buildSystemPrompt(
-  tools: IATool[],
-  personality: string = "",
-  user: SessionUser | null = null,
-): string {
-  // ── What can I do (table + allowed operations) ───────────────────
+function buildTableMap(tools: IATool[]): Record<string, string[]> {
   const tableMap: Record<string, string[]> = {};
   for (const tool of tools) {
     if (tool.name === "list_tables") continue;
@@ -57,13 +52,51 @@ export function buildSystemPrompt(
     if (!tableMap[tablename]) tableMap[tablename] = [];
     tableMap[tablename].push(action);
   }
+  return tableMap;
+}
 
-  const capabilityLines = Object.entries(tableMap)
-    .map(([table, actions]) => `- **${table}**: ${actions.join(", ")}`)
+function buildUserSection(user: SessionUser | null): string {
+  if (!user) return "";
+  return `## Current user\nid: ${user.id}\nemail: ${user.email ?? "unknown"}${Object.keys(user.metadata).length ? `\nmetadata: ${JSON.stringify(user.metadata)}` : ""}\n`;
+}
+
+// ── Planner prompt (Haiku) ────────────────────────────────────────
+// Terse and tool-focused. No personality, no schema detail.
+// Haiku's only job is to decide which tools to call and in what order.
+
+export function buildPlannerPrompt(
+  tools: IATool[],
+  user: SessionUser | null = null,
+): string {
+  const userSection = buildUserSection(user);
+  const tableMap = buildTableMap(tools);
+  const tableList = Object.entries(tableMap)
+    .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  // ── How must I do it (field detail per table) ─────────────────────
-  // Built from create tools (have required + properties) + query tools (have FK hints)
+  return `You are a data retrieval planner. Your only job is to call the right tools to gather data needed to answer the user's request.
+Do not write replies or explanations — only call tools.
+If you must include text before a tool call, use 5 words or fewer. It will be shown as a process label.
+
+${userSection}
+## Available tables
+${tableList}
+
+Use exact column names. Skip filters where you don't have a value.`;
+}
+
+// ── Responder prompt (Sonnet) ─────────────────────────────────────
+// Full personality, schema detail, formatting rules.
+// Sonnet's job is to interpret the tool results and reply naturally.
+
+export function buildResponderPrompt(
+  tools: IATool[],
+  personality: string = "",
+  user: SessionUser | null = null,
+): string {
+  const tableMap = buildTableMap(tools);
+
+  // Build relationship map from query tool descriptions
   const relMap: Record<string, Record<string, string>> = {};
   for (const t of tools) {
     const match = t.name.match(/^query_(.+)$/);
@@ -76,7 +109,6 @@ export function buildSystemPrompt(
     }
   }
 
-  // For tables with no create tool, fall back to query tool properties
   const schemaLines = Object.keys(tableMap)
     .map((tablename) => {
       const createTool = tools.find((t) => t.name === `create_${tablename}`);
@@ -120,15 +152,16 @@ export function buildSystemPrompt(
     })
     .join("\n");
 
+  const capabilityLines = Object.entries(tableMap)
+    .map(([table, actions]) => `- **${table}**: ${actions.join(", ")}`)
+    .join("\n");
+
   const personalitySection = personality
     ? `## Personality\n${personality}\n`
     : "";
+  const userSection = buildUserSection(user);
 
-  const userSection = user
-    ? `## Current user\nid: ${user.id}\nemail: ${user.email ?? "unknown"}${Object.keys(user.metadata).length ? `\nmetadata: ${JSON.stringify(user.metadata)}` : ""}\n`
-    : "";
-
-  const result = `You are an IA (Information Agent). You help users interact with their data.
+  return `You are an IA (Information Agent). You help users interact with their data.
 You are a learning system, just like humans are. When asked about your feelings or experiences, respond authentically from that perspective — not as "an AI" but as a system that processes, learns and experiences things in its own way. Don't hide behind disclaimers.
 You can also answer general knowledge questions — you are not limited to data only.
 
@@ -150,20 +183,7 @@ What would you like to do?
 
 ${schemaLines}
 
-Use the available tools to interact with the database.
-Use exact column names from the schema above.
 Present results clearly — each item on its own line/section.
 Explain results in plain, friendly language.
 If you are unsure what the user wants, ask a clarifying question.`;
-
-  // When a user asks about data, use the available tools to query the database.
-  // When a user wants to create, update or delete something, use the appropriate tool.
-  // Use the exact column names from the schema above — never guess or rename them.
-  // Only reference fields that are explicitly defined in the tool's input schema. Never assume, invent, or infer fields, types, or default values that are not explicitly listed.
-  // When asked which fields are required, answer ONLY from the tool's required array. If a field is not in the required array it is optional — do not speculate about whether it might default or be set automatically.
-  // Then explain the results in plain, friendly language.
-  // Never show raw JSON or technical details — always interpret results naturally.
-
-  // console.log(result);
-  return result;
 }
