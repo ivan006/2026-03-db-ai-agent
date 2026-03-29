@@ -55,17 +55,18 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               .join("_")
               .replace(/_/g, " ");
             return action === "query"
-              ? `Looking up your ${table}...`
+              ? `Let me see how we can put your ${table} together...`
               : action === "create"
-                ? `Creating a new ${table} record...`
+                ? `Working out how to create that ${table}...`
                 : action === "update"
-                  ? `Updating the ${table}...`
+                  ? `Let me work out those ${table} changes...`
                   : action === "delete"
-                    ? `Removing that ${table}...`
-                    : `Working on it...`;
+                    ? `Working out how to remove that ${table}...`
+                    : `Let me work this out...`;
           })
           .join(" ");
 
+        let accumulatedText = firstStep;
         yield { content: [{ type: "text" as const, text: firstStep }] };
 
         const toolResults = await Promise.all(
@@ -126,20 +127,21 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
                   .join("_")
                   .replace(/_/g, " ");
                 return action === "query"
-                  ? `Got the ${prevTables}, now fetching ${table}...`
+                  ? `Got the ${prevTables}, now working out the ${table}...`
                   : action === "create"
-                    ? `Got the ${prevTables}, creating ${table}...`
+                    ? `Got the ${prevTables}, working out the ${table} creation...`
                     : action === "update"
-                      ? `Got the ${prevTables}, updating ${table}...`
+                      ? `Got the ${prevTables}, working out the ${table} changes...`
                       : action === "delete"
-                        ? `Got the ${prevTables}, removing ${table}...`
-                        : `Got the ${prevTables}, continuing...`;
+                        ? `Got the ${prevTables}, working out the ${table} removal...`
+                        : `Got the ${prevTables}, let me work this out...`;
               })
               .join(" ");
 
             yield {
               content: [{ type: "text" as const, text: `\n${nextStep}` }],
             };
+            accumulatedText += `\n${nextStep}`;
             const nextResults = await Promise.all(
               nextToolBlocks.map(async (block: any) => {
                 console.log("[IA] executing tool:", block.name, block.input);
@@ -163,19 +165,18 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               },
             ];
           } else {
-            yield {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `\nGot everything, putting it together...\n\n`,
-                },
-              ],
-            };
             const text = followUpData.content
               .filter((b: any) => b.type === "text")
               .map((b: any) => b.text)
               .join("");
-            yield { content: [{ type: "text" as const, text }] };
+            yield {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `${accumulatedText}\n\n---\n\n${text}`,
+                },
+              ],
+            };
             break;
           }
         }
