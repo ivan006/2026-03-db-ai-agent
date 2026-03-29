@@ -35,6 +35,30 @@ export async function getAuthenticatedClient() {
   );
 }
 
+// ── Session user ──────────────────────────────────────────────────
+
+export type SessionUser = {
+  id: string;
+  email: string | undefined;
+  metadata: Record<string, any>;
+};
+
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) return null;
+
+  const { user } = session;
+  console.log("[IA] session user:", user.id, user.email);
+  return {
+    id: user.id,
+    email: user.email,
+    metadata: user.user_metadata ?? {},
+  };
+}
+
 // ── Tool generation ───────────────────────────────────────────────
 
 export type IATool = {
