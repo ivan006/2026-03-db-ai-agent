@@ -35,6 +35,17 @@ ORDER BY table_name, ordinal_position;
 
 ---
 
+#### `tools-inputs/enums.json`
+
+```sql
+SELECT t.typname AS enum_name, e.enumlabel AS value
+FROM pg_type t
+JOIN pg_enum e ON t.oid = e.enumtypid
+ORDER BY t.typname, e.enumsortorder;
+```
+
+---
+
 #### `tools-inputs/foreign_keys.json`
 
 ```sql
@@ -49,17 +60,6 @@ JOIN information_schema.referential_constraints rc
 JOIN information_schema.constraint_column_usage ccu
   ON rc.unique_constraint_name = ccu.constraint_name
 WHERE kcu.table_schema = 'public';
-```
-
----
-
-#### `tools-inputs/enums.json`
-
-```sql
-SELECT t.typname AS enum_name, e.enumlabel AS value
-FROM pg_type t
-JOIN pg_enum e ON t.oid = e.enumtypid
-ORDER BY t.typname, e.enumsortorder;
 ```
 
 ---
