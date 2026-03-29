@@ -59,7 +59,7 @@ export function buildSystemPrompt(
   }
 
   const capabilityLines = Object.entries(tableMap)
-    .map(([table, actions]) => `  ${table}: ${actions.join(", ")}`)
+    .map(([table, actions]) => `- **${table}**: ${actions.join(", ")}`)
     .join("\n");
 
   // ── How must I do it (field detail per table) ─────────────────────

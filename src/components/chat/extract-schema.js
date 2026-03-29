@@ -1,171 +1,110 @@
 #!/usr/bin/env node
 // ── extract-schema.js ─────────────────────────────────────────────
-// Converts the output of `npx supabase gen types typescript` into a
-// rich schema.json that the IA can use for dynamic tool generation.
+// Reads raw SQL exports from tools-inputs/ and outputs tools.json.
 //
 // Usage:
-//   node src/components/chat/extract-schema.js schema.old.ts
-//   node src/components/chat/extract-schema.js schema.old.ts custom-output.json
+//   node src/components/chat/extract-schema.js
 //
-// Output:
-//   src/components/chat/schema.json (default)
+// Input:  src/components/chat/tools-inputs/{columns,enums,foreign_keys,policies}.json
+// Output: src/components/chat/tools.json
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const INPUTS_DIR = path.join(__dirname, "tools-inputs");
+const OUTPUT_PATH = path.join(__dirname, "tools.json");
 
-// ── Read stdin ────────────────────────────────────────────────────
+// ── Load inputs ───────────────────────────────────────────────────
 
-function readStdin() {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => (data += chunk));
-    process.stdin.on("end", () => resolve(data));
-    process.stdin.on("error", reject);
-  });
+function loadInput(filename) {
+  const filePath = path.join(INPUTS_DIR, filename);
+  if (!fs.existsSync(filePath)) {
+    console.error(`Missing required input file: ${filePath}`);
+    process.exit(1);
+  }
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
 // ── Type mapping ──────────────────────────────────────────────────
-// Maps TypeScript types from the CLI output to friendly type names.
 
-function mapType(rawType) {
-  if (rawType.includes("Database[")) return "enum_ref"; // resolved later by enum resolution step
-  const base = rawType.replace("| null", "").trim();
-  const map = {
-    string: "text",
-    number: "number",
-    boolean: "boolean",
-    Json: "json",
-  };
-  return map[base] ?? base;
+function toJsonSchemaType(pgType) {
+  if (pgType === "boolean") return "boolean";
+  if (
+    pgType === "integer" ||
+    pgType === "numeric" ||
+    pgType === "bigint" ||
+    pgType === "real" ||
+    pgType === "double precision"
+  )
+    return "number";
+  return "string";
 }
 
-// ── Parse Row block ───────────────────────────────────────────────
-// Extracts column name and type from a Row: { ... } block.
+// ── Build permission map ──────────────────────────────────────────
 
-function parseRowBlock(block) {
-  const columns = {};
-  const lineRegex = /^\s{10}(\w+):\s*(.+?);?\s*$/gm;
-  let match;
-  while ((match = lineRegex.exec(block)) !== null) {
-    const [, name, rawType] = match;
-    columns[name] = {
-      type: mapType(rawType),
-      nullable: rawType.includes("| null"),
-    };
-  }
-  return columns;
-}
-
-// ── Parse Insert block ────────────────────────────────────────────
-// Fields without `?` are required on insert.
-
-function parseInsertBlock(block) {
-  const required = [];
-  const lineRegex = /^\s{10}(\w+)(\?)?\s*:/gm;
-  let match;
-  while ((match = lineRegex.exec(block)) !== null) {
-    const [, name, optional] = match;
-    if (!optional) required.push(name);
-  }
-  return required;
-}
-
-// ── Parse Relationships block ─────────────────────────────────────
-
-function parseRelationships(block) {
-  const relationships = [];
-  // Normalize line endings before matching
-  const normalized = block.replace(/\r\n/g, "\n");
-  const relRegex =
-    /foreignKeyName:\s*"([^"]+)"[\s\S]*?columns:\s*\["([^"]+)"\][\s\S]*?isOneToOne:\s*(true|false)[\s\S]*?referencedRelation:\s*"([^"]+)"[\s\S]*?referencedColumns:\s*\["([^"]+)"\]/g;
-  let match;
-  while ((match = relRegex.exec(normalized)) !== null) {
-    const [, fkName, cols, isOneToOne, refTable, refCols] = match;
-    relationships.push({
-      foreignKey: fkName,
-      columns: cols
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean),
-      isOneToOne: isOneToOne === "true",
-      referencedTable: refTable,
-      referencedColumns: refCols
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean),
-    });
-  }
-  return relationships;
-}
-
-// ── Parse Enums ───────────────────────────────────────────────────
-
-function parseEnums(content) {
-  const enums = {};
-  const enumsMatch = content.match(
-    /Enums:\s*\{([\s\S]*?)\};?\s*CompositeTypes/,
-  );
-  if (!enumsMatch) return enums;
-
-  const enumRegex = /(\w+):\s*((?:"[^"]+"\s*\|?\s*)+)/g;
-  let match;
-  while ((match = enumRegex.exec(enumsMatch[1])) !== null) {
-    const [, name, values] = match;
-    enums[name] = values
-      .split("|")
-      .map((v) => v.trim().replace(/"/g, ""))
-      .filter(Boolean);
-  }
-  return enums;
-}
-
-// ── Type mapping to JSON Schema ───────────────────────────────────
-
-function toJsonSchemaType(type) {
-  if (type === "boolean") return "boolean";
-  if (type === "number") return "number";
-  return "string"; // text, uuid, json, timestamp etc all pass as string
-}
-
-// ── Load policies ─────────────────────────────────────────────────
-// Builds a map of { tableName: Set<cmd> } for authenticated role.
-// CMD values: INSERT, SELECT, UPDATE, DELETE, ALL
-
-function buildPermissionMap(policiesPath) {
-  if (!fs.existsSync(policiesPath)) return null;
-
-  const policies = JSON.parse(fs.readFileSync(policiesPath, "utf8"));
+function buildPermissionMap(policies) {
   const map = {};
-
   for (const policy of policies) {
     const { tablename, cmd, roles } = policy;
-    if (!roles.includes("authenticated")) continue;
-
+    const rolesStr = Array.isArray(roles)
+      ? roles.join(",")
+      : String(roles ?? "");
+    if (!rolesStr.includes("authenticated")) continue;
     if (!map[tablename]) map[tablename] = new Set();
-
     if (cmd === "ALL") {
-      map[tablename].add("INSERT");
-      map[tablename].add("SELECT");
-      map[tablename].add("UPDATE");
-      map[tablename].add("DELETE");
+      ["INSERT", "SELECT", "UPDATE", "DELETE"].forEach((c) =>
+        map[tablename].add(c),
+      );
     } else {
       map[tablename].add(cmd);
     }
   }
-
   return map;
 }
 
-function buildTools(content, enums, permissions) {
-  // Helper: check if authenticated role has permission for a cmd on a table
-  const can = (tableName, cmd) => {
-    if (!permissions) return true; // no policies file — assume all allowed
-    return permissions[tableName]?.has(cmd) ?? false;
-  };
+// ── Main ──────────────────────────────────────────────────────────
+
+function main() {
+  console.log(`Reading inputs from ${INPUTS_DIR}`);
+
+  const columns = loadInput("columns.json");
+  const enums = loadInput("enums.json");
+  const foreignKeys = loadInput("foreign_keys.json");
+  const policies = loadInput("policies.json");
+
+  // Build enum map: { enum_name: [value, ...] }
+  const enumMap = {};
+  for (const { enum_name, value } of enums) {
+    if (!enumMap[enum_name]) enumMap[enum_name] = [];
+    enumMap[enum_name].push(value);
+  }
+
+  // Build FK map: { table_name: { col: { referenced_table, referenced_column } } }
+  const fkMap = {};
+  for (const {
+    table_name,
+    column_name,
+    referenced_table,
+    referenced_column,
+  } of foreignKeys) {
+    if (!fkMap[table_name]) fkMap[table_name] = {};
+    fkMap[table_name][column_name] = { referenced_table, referenced_column };
+  }
+
+  // Build permission map
+  const permissions = buildPermissionMap(policies);
+  const can = (tableName, cmd) => permissions[tableName]?.has(cmd) ?? false;
+
+  // Group columns by table
+  const tableMap = {};
+  for (const col of columns) {
+    if (!tableMap[col.table_name]) tableMap[col.table_name] = [];
+    tableMap[col.table_name].push(col);
+  }
+
+  // Build tools array
   const tools = [
     {
       type: "custom",
@@ -180,61 +119,58 @@ function buildTools(content, enums, permissions) {
     },
   ];
 
-  const tablesMatch = content.match(/Tables:\s*\{([\s\S]*?)Views:/);
-  if (!tablesMatch) {
-    console.error("Could not find Tables block in input.");
-    process.exit(1);
-  }
+  for (const [tableName, cols] of Object.entries(tableMap)) {
+    // Build column properties
+    const colProperties = {};
+    const requiredOnInsert = [];
 
-  const tablesBlock = tablesMatch[1];
-  const tableRegex = /^      (\w+): \{([\s\S]*?)\n      \};/gm;
-  let match;
+    for (const col of cols) {
+      const { column_name, data_type, is_nullable, column_default } = col;
+      if (column_name === "id" || column_name === "created_at") continue;
 
-  while ((match = tableRegex.exec(tablesBlock)) !== null) {
-    const [, tableName, tableBody] = match;
+      // Check if this column is a USER-DEFINED type (enum)
+      let prop;
+      if (data_type === "USER-DEFINED") {
+        // Try to find matching enum by looking at FK or column naming conventions
+        // We match enum by column name patterns
+        const matchingEnum = Object.keys(enumMap).find(
+          (e) =>
+            column_name.includes(e) ||
+            e.includes(column_name.replace(/_/g, "")),
+        );
+        if (matchingEnum) {
+          prop = { type: "string", enum: enumMap[matchingEnum] };
+        } else {
+          prop = { type: "string" };
+        }
+      } else {
+        prop = { type: toJsonSchemaType(data_type) };
+      }
 
-    const rowMatch = tableBody.match(/Row:\s*\{([\s\S]*?)\};/);
-    const insertMatch = tableBody.match(/Insert:\s*\{([\s\S]*?)\};/);
-    const relMatch = tableBody.match(
-      /Relationships:\s*\[([\s\S]*?)\n        \];/,
-    );
+      // Add FK relationship annotation
+      if (fkMap[tableName]?.[column_name]) {
+        prop.description = `→ ${fkMap[tableName][column_name].referenced_table}.${fkMap[tableName][column_name].referenced_column}`;
+      }
 
-    const columns = rowMatch ? parseRowBlock(rowMatch[1]) : {};
-    const requiredOnInsert = insertMatch
-      ? parseInsertBlock(insertMatch[1]).filter(
-          (f) => f !== "id" && f !== "created_at",
-        )
-      : [];
-    const relationships = relMatch ? parseRelationships(relMatch[1]) : [];
+      colProperties[column_name] = prop;
 
-    // Resolve enums into column definitions
-    for (const [colName, colDef] of Object.entries(columns)) {
-      const enumMatch = tableBody.match(
-        new RegExp(
-          `${colName}\\s*:\\s*Database\\["public"\\]\\["Enums"\\]\\["(\\w+)"\\]`,
-        ),
-      );
-      if (enumMatch) {
-        colDef.type = "enum";
-        colDef.enumValues = enums[enumMatch[1]] ?? [];
+      // Required if NOT NULL and no default
+      if (is_nullable === "NO" && !column_default) {
+        requiredOnInsert.push(column_name);
       }
     }
 
-    // Build column properties for JSON Schema
-    const colProperties = {};
-    for (const [col, def] of Object.entries(columns)) {
-      if (col === "id" || col === "created_at") continue;
-      const prop = { type: toJsonSchemaType(def.type) };
-      if (def.enumValues?.length) prop.enum = def.enumValues;
-      colProperties[col] = prop;
-    }
-
     // Relationship hint for query description
-    const relHint = relationships.length
-      ? ` Related: ${relationships.map((r) => `${r.columns[0]} → ${r.referencedTable}.${r.referencedColumns[0]}`).join(", ")}.`
+    const rels = fkMap[tableName] ?? {};
+    const relHint = Object.entries(rels).length
+      ? ` Related: ${Object.entries(rels)
+          .map(
+            ([col, r]) =>
+              `${col} → ${r.referenced_table}.${r.referenced_column}`,
+          )
+          .join(", ")}.`
       : "";
 
-    // query
     if (can(tableName, "SELECT"))
       tools.push({
         type: "custom",
@@ -253,7 +189,6 @@ function buildTools(content, enums, permissions) {
         },
       });
 
-    // create
     if (can(tableName, "INSERT"))
       tools.push({
         type: "custom",
@@ -272,7 +207,6 @@ function buildTools(content, enums, permissions) {
         },
       });
 
-    // update
     if (can(tableName, "UPDATE"))
       tools.push({
         type: "custom",
@@ -286,17 +220,12 @@ function buildTools(content, enums, permissions) {
               description:
                 "Record ID — must be a valid UUID from a prior query, never invented.",
             },
-            data: {
-              type: "object",
-              properties: colProperties,
-              required: [],
-            },
+            data: { type: "object", properties: colProperties, required: [] },
           },
           required: ["id", "data"],
         },
       });
 
-    // delete
     if (can(tableName, "DELETE"))
       tools.push({
         type: "custom",
@@ -316,84 +245,16 @@ function buildTools(content, enums, permissions) {
       });
   }
 
-  return tools;
-}
-
-// ── Main ──────────────────────────────────────────────────────────
-
-async function main() {
-  const inputArg = process.argv[2];
-  const outputArg = process.argv[3];
-
-  let input;
-  let outPath;
-
-  if (inputArg) {
-    const inputPath = path.resolve(inputArg);
-    if (!fs.existsSync(inputPath)) {
-      console.error(`Input file not found: ${inputPath}`);
-      process.exit(1);
-    }
-    input = fs.readFileSync(inputPath, "utf8");
-    outPath = outputArg
-      ? path.resolve(outputArg)
-      : path.join(path.dirname(inputPath), "schema.json");
-  } else {
-    input = await readStdin();
-    outPath = outputArg
-      ? path.resolve(outputArg)
-      : path.join(process.cwd(), "schema.json");
-  }
-
-  input = input.replace(/\r\n/g, "\n");
-
-  if (!input.trim()) {
-    console.error(
-      "Usage:\n" +
-        "  node src/components/chat/extract-schema.js schema.old.ts\n" +
-        "  node src/components/chat/extract-schema.js schema.old.ts custom-output.json",
-    );
-    process.exit(1);
-  }
-
-  const enums = parseEnums(input);
-
-  // Load policies.json from same directory as input file if it exists
-  const policiesPath = inputArg
-    ? path.join(path.dirname(path.resolve(inputArg)), "policies.json")
-    : path.join(process.cwd(), "policies.json");
-
-  const permissions = buildPermissionMap(policiesPath);
-  if (permissions) {
-    console.log(`✓ policies.json loaded from ${policiesPath}`);
-  } else {
-    console.log(`  (no policies.json found — all operations included)`);
-  }
-
-  const tools = buildTools(input, enums, permissions);
-
   const tableCount = new Set(
     tools
       .filter((t) => t.name !== "list_tables")
       .map((t) => t.name.replace(/^(query|create|update|delete)_/, "")),
   ).size;
-  if (tableCount === 0) {
-    console.error(
-      "No tables found in input. Check that the file is valid Supabase CLI output.",
-    );
-    process.exit(1);
-  }
 
-  fs.writeFileSync(outPath, JSON.stringify(tools, null, 2));
+  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(tools, null, 2));
 
-  console.log(`✓ schema.json written to ${outPath}`);
+  console.log(`✓ tools.json written to ${OUTPUT_PATH}`);
   console.log(`  ${tableCount} tables → ${tools.length} tools generated`);
-  if (Object.keys(enums).length > 0) {
-    console.log(`  enums resolved: ${Object.keys(enums).join(", ")}`);
-  }
 }
 
-main().catch((err) => {
-  console.error("Error:", err.message);
-  process.exit(1);
-});
+main();
