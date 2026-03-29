@@ -42,20 +42,13 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
       };
 
       // ── Phase 1: Haiku planning loop ──────────────────────────────
-      const userText =
-        (messages[messages.length - 1]?.content as any[])?.[0]?.text ??
-        "your request";
       yield {
-        content: [
-          {
-            type: "text" as const,
-            text: step(`- 🤔 Ahhh...`),
-          },
-        ],
+        content: [{ type: "text" as const, text: step(`- 🤔 Uhhh...`) }],
       };
 
       let plannerMessages = [...formattedMessages];
       let allToolResults: any[] = [];
+      let isFirstRound = true;
 
       while (true) {
         const planData = await fetchClaude(
@@ -154,24 +147,17 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             },
           ];
 
-          // Show solving step for next round
-          const solvingFor = toolUseBlocks
-            .map((b: any) => b.name.split("_").slice(1).join(" "))
-            .join(", ");
+          isFirstRound = false;
+
+          // Subsequent rounds say Hmmm
           yield {
-            content: [
-              {
-                type: "text" as const,
-                text: step(`- 🤔 Ahhh...`),
-              },
-            ],
+            content: [{ type: "text" as const, text: step(`- 🤔 Hmmm...`) }],
           };
         } else {
           // Haiku returned text — if it's a short label that's fine, if it's a full reply pass to Sonnet
           const haikuText =
             planData.content.find((b: any) => b.type === "text")?.text ?? "";
           if (haikuText.length > 100) {
-            // Haiku went rogue — add its context and let Sonnet clean it up
             plannerMessages = [
               ...plannerMessages,
               { role: "assistant", content: planData.content },
@@ -183,12 +169,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
       // ── Phase 2: Sonnet reply (no tools) ─────────────────────────
       yield {
-        content: [
-          {
-            type: "text" as const,
-            text: step("- 💬 Ummm..."),
-          },
-        ],
+        content: [{ type: "text" as const, text: step("- 💬 Ummm...") }],
       };
 
       // Build full context for Sonnet
@@ -229,7 +210,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
       yield {
         content: [
-          { type: "text" as const, text: `${accumulatedText}\n---\n\n${text}` },
+          { type: "text" as const, text: `${accumulatedText}\n\n\n${text}` },
         ],
       };
     },
