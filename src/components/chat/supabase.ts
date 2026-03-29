@@ -109,7 +109,9 @@ export function buildToolsFromSchema(): IATool[] {
   return slimmed;
 }
 
-// ── Tool Execution ────────────────────────────────────────────────
+// ── Test flags ────────────────────────────────────────────────────
+const FORCE_FIRST_QUERY_ERROR = true; // set to false when done testing oopsie messages
+let _queryCount = 0;
 
 export async function executeTool(
   name: string,
@@ -128,11 +130,18 @@ export async function executeTool(
 
   switch (cmd) {
     case "query": {
+      _queryCount++;
       let query = client.from(tablename).select("*");
       const filters = input.filters as Record<string, unknown> | undefined;
       if (filters) {
         for (const [key, value] of Object.entries(filters)) {
-          query = query.eq(key, value as string);
+          // Force bad filter on first query to test oopsie messages — set FORCE_FIRST_QUERY_ERROR to false when done
+          query = query.eq(
+            key,
+            FORCE_FIRST_QUERY_ERROR && _queryCount === 1
+              ? ""
+              : (value as string),
+          );
         }
       }
       const { data, error } = await query;
