@@ -61,6 +61,19 @@ export function buildSystemPrompt(
     .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
     .join("\n");
 
+  // Build relationship map from query tool descriptions: col → referencedTable
+  const relMap: Record<string, Record<string, string>> = {};
+  for (const t of tools) {
+    const match = t.name.match(/^query_(.+)$/);
+    if (!match) continue;
+    const tablename = match[1];
+    const relMatches = t.description.matchAll(/(\w+) → (\w+)\.\w+/g);
+    for (const m of relMatches) {
+      if (!relMap[tablename]) relMap[tablename] = {};
+      relMap[tablename][m[1]] = m[2];
+    }
+  }
+
   // Derive schema lines from create tools — they have both properties and required arrays
   const schemaLines = tools
     .filter((t) => t.name.startsWith("create_"))
@@ -69,17 +82,19 @@ export function buildSystemPrompt(
       const data = (t.input_schema as any)?.properties?.data ?? {};
       const props = data.properties ?? {};
       const required: string[] = data.required ?? [];
+      const rels = relMap[tablename] ?? {};
       const cols = Object.entries(props)
         .map(([col, def]: [string, any]) => {
           const type = def.enum ? `enum(${def.enum.join("|")})` : def.type;
           const req = required.includes(col) ? "" : "?";
-          return `${col}:${type}${req}`;
+          const link = rels[col] ? `(→${rels[col]})` : "";
+          return `${col}:${type}${req}${link}`;
         })
         .join(", ");
       return `  ${tablename}: ${cols}`;
     })
     .join("\n");
-
+  console.log(schemaLines);
   const personalitySection = personality
     ? `## Personality\n${personality}\n`
     : "";
