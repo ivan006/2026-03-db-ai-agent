@@ -5,7 +5,7 @@
 // Schema is parsed from src/schema.ts at build time via schema-parser.ts
 
 import { createClient } from "@supabase/supabase-js";
-import { RUNTIME_SCHEMA } from "./schema-parser";
+import { RUNTIME_SCHEMA, type TableDef } from "./schema-parser";
 
 // Base client — used for auth operations only
 export const supabase = createClient(
@@ -35,29 +35,6 @@ export async function getAuthenticatedClient() {
   );
 }
 
-// ── Session user ──────────────────────────────────────────────────
-
-export type SessionUser = {
-  id: string;
-  email: string | undefined;
-  metadata: Record<string, any>;
-};
-
-export async function getSessionUser(): Promise<SessionUser | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) return null;
-
-  const { user } = session;
-  return {
-    id: user.id,
-    email: user.email,
-    metadata: user.user_metadata ?? {},
-  };
-}
-
 // ── Tool generation ───────────────────────────────────────────────
 
 export type IATool = {
@@ -75,33 +52,62 @@ export function buildToolsFromSchema(): IATool[] {
     },
   ];
 
-  for (const [tablename, columns] of Object.entries(RUNTIME_SCHEMA)) {
-    const colList = (columns as string[]).join(", ");
+  for (const [tablename, tableDef] of Object.entries(RUNTIME_SCHEMA)) {
+    const { columns, requiredOnInsert, relationships } = tableDef as TableDef;
+
+    // Build a readable column summary with types for tool descriptions
+    const colSummary = Object.entries(columns)
+      .map(([col, def]) => {
+        const type = def.enumValues?.length
+          ? `enum(${def.enumValues.join("|")})`
+          : def.type;
+        return `${col}:${type}${def.nullable ? "?" : ""}`;
+      })
+      .join(", ");
+
+    // Relationship hint for query tool
+    const relHint = relationships.length
+      ? ` Related tables: ${relationships.map((r) => `${r.columns[0]} → ${r.referencedTable}.${r.referencedColumns[0]}`).join(", ")}.`
+      : "";
 
     tools.push({
       name: `query_${tablename}`,
-      description: `Fetches records from ${tablename}. Available columns: ${colList}. Supports optional key-value filters.`,
+      description: `Fetches records from ${tablename}.${relHint} Columns: ${colSummary}. Supports optional key-value filters.`,
       input_schema: {
         type: "object",
         properties: {
           filters: {
             type: "object",
-            description: `Key-value pairs to filter ${tablename} records. Use exact column names: ${colList}`,
+            description: `Key-value pairs to filter ${tablename} records. Use exact column names.`,
           },
         },
         required: [],
       },
     });
 
+    // Build required/optional properties for create tool
+    const createProperties: Record<string, object> = {};
+    for (const [col, def] of Object.entries(columns)) {
+      if (col === "id" || col === "created_at") continue;
+      const type = def.enumValues?.length
+        ? `enum(${def.enumValues.join("|")})`
+        : def.type;
+      createProperties[col] = {
+        type: "string",
+        description: `${type}${def.nullable ? ", optional" : ", required"}`,
+      };
+    }
+
     tools.push({
       name: `create_${tablename}`,
-      description: `Creates a new record in ${tablename}. Available columns: ${colList}.`,
+      description: `Creates a new record in ${tablename}. Required fields: ${requiredOnInsert.join(", ") || "none"}.`,
       input_schema: {
         type: "object",
         properties: {
           data: {
             type: "object",
-            description: `Data to insert into ${tablename}. Use exact column names: ${colList}`,
+            description: `Data to insert. Required: ${requiredOnInsert.join(", ") || "none"}. All columns: ${colSummary}`,
+            properties: createProperties,
           },
         },
         required: ["data"],
@@ -110,14 +116,14 @@ export function buildToolsFromSchema(): IATool[] {
 
     tools.push({
       name: `update_${tablename}`,
-      description: `Updates a record in ${tablename} by id. Available columns: ${colList}.`,
+      description: `Updates a record in ${tablename} by id. Columns: ${colSummary}.`,
       input_schema: {
         type: "object",
         properties: {
           id: { type: "string", description: "Record ID to update" },
           data: {
             type: "object",
-            description: `Fields to update in ${tablename}. Use exact column names: ${colList}`,
+            description: `Fields to update in ${tablename}. Use exact column names.`,
           },
         },
         required: ["id", "data"],
@@ -136,7 +142,7 @@ export function buildToolsFromSchema(): IATool[] {
       },
     });
   }
-  // console.log(tools);
+  console.log(tools);
   return tools;
 }
 

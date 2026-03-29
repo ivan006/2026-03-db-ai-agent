@@ -4,17 +4,17 @@
 // rich schema.json that the IA can use for dynamic tool generation.
 //
 // Usage:
-//   npx supabase gen types typescript --project-id YOUR_PROJECT_ID | node scripts/extract-schema.js
+//   node src/components/chat/extract-schema.js schema.old.ts
+//   node src/components/chat/extract-schema.js schema.old.ts custom-output.json
 //
 // Output:
-//   src/schema.json
+//   src/components/chat/schema.json (default)
 
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUTPUT_PATH = path.resolve(__dirname, "../src/schema.json");
 
 // ── Read stdin ────────────────────────────────────────────────────
 
@@ -190,6 +190,8 @@ async function main() {
   const outputArg = process.argv[3];
 
   let input;
+  let outPath;
+
   if (inputArg) {
     const inputPath = path.resolve(inputArg);
     if (!fs.existsSync(inputPath)) {
@@ -197,23 +199,15 @@ async function main() {
       process.exit(1);
     }
     input = fs.readFileSync(inputPath, "utf8");
+    outPath = outputArg
+      ? path.resolve(outputArg)
+      : path.join(path.dirname(inputPath), "schema.json");
   } else {
     input = await readStdin();
+    outPath = outputArg
+      ? path.resolve(outputArg)
+      : path.join(process.cwd(), "schema.json");
   }
-
-  input = input.replace(/\r\n/g, "\n");
-
-  if (!input.trim()) {
-    console.error(
-      "Usage:\n" +
-        "  node scripts/extract-schema.js schema.ts              (outputs src/schema.json)\n" +
-        "  node scripts/extract-schema.js schema.ts output.json  (custom output path)\n" +
-        "  npx supabase gen types typescript --project-id YOUR_ID | node scripts/extract-schema.js",
-    );
-    process.exit(1);
-  }
-
-  const outPath = outputArg ? path.resolve(outputArg) : OUTPUT_PATH;
 
   const enums = parseEnums(input);
   const schema = parseTables(input, enums);

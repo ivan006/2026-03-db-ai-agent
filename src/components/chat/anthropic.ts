@@ -63,9 +63,17 @@ export function buildSystemPrompt(
     .join("\n");
 
   const schemaLines = Object.entries(RUNTIME_SCHEMA)
-    .map(
-      ([table, columns]) => `  ${table}: ${(columns as string[]).join(", ")}`,
-    )
+    .map(([table, def]) => {
+      const cols = Object.entries(def.columns)
+        .map(([col, colDef]) => {
+          const type = colDef.enumValues?.length
+            ? `enum(${colDef.enumValues.join("|")})`
+            : colDef.type;
+          return `${col}:${type}${colDef.nullable ? "?" : ""}`;
+        })
+        .join(", ");
+      return `  ${table}: ${cols}`;
+    })
     .join("\n");
 
   const personalitySection = personality
