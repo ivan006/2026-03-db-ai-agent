@@ -186,15 +186,34 @@ function parseTables(content, enums) {
 // ── Main ──────────────────────────────────────────────────────────
 
 async function main() {
-  const input = (await readStdin()).replace(/\r\n/g, "\n");
+  const inputArg = process.argv[2];
+  const outputArg = process.argv[3];
+
+  let input;
+  if (inputArg) {
+    const inputPath = path.resolve(inputArg);
+    if (!fs.existsSync(inputPath)) {
+      console.error(`Input file not found: ${inputPath}`);
+      process.exit(1);
+    }
+    input = fs.readFileSync(inputPath, "utf8");
+  } else {
+    input = await readStdin();
+  }
+
+  input = input.replace(/\r\n/g, "\n");
 
   if (!input.trim()) {
     console.error(
-      "No input received. Pipe the supabase CLI output into this script:\n" +
+      "Usage:\n" +
+        "  node scripts/extract-schema.js schema.ts              (outputs src/schema.json)\n" +
+        "  node scripts/extract-schema.js schema.ts output.json  (custom output path)\n" +
         "  npx supabase gen types typescript --project-id YOUR_ID | node scripts/extract-schema.js",
     );
     process.exit(1);
   }
+
+  const outPath = outputArg ? path.resolve(outputArg) : OUTPUT_PATH;
 
   const enums = parseEnums(input);
   const schema = parseTables(input, enums);
@@ -202,14 +221,14 @@ async function main() {
   const tableCount = Object.keys(schema).length;
   if (tableCount === 0) {
     console.error(
-      "No tables found in input. Check that the CLI output is valid.",
+      "No tables found in input. Check that the file is valid Supabase CLI output.",
     );
     process.exit(1);
   }
 
-  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(schema, null, 2));
+  fs.writeFileSync(outPath, JSON.stringify(schema, null, 2));
 
-  console.log(`✓ schema.json written to ${OUTPUT_PATH}`);
+  console.log(`✓ schema.json written to ${outPath}`);
   console.log(`  ${tableCount} tables extracted:`);
   for (const [table, def] of Object.entries(schema)) {
     const colCount = Object.keys(def.columns).length;
