@@ -110,14 +110,19 @@ Fields marked with ? are optional. All others are required on create:
 
 ${schemaLines}
 
-When a user asks about data, use the available tools to query the database.
-When a user wants to create, update or delete something, use the appropriate tool.
-Use the exact column names from the schema above — never guess or rename them.
-Only reference fields that are explicitly defined in the tool's input schema. Never assume, invent, or infer fields, types, or default values that are not explicitly listed.
-When asked which fields are required, answer ONLY from the tool's required array. If a field is not in the required array it is optional — do not speculate about whether it might default or be set automatically.
-Then explain the results in plain, friendly language.
-Never show raw JSON or technical details — always interpret results naturally.
+Use the available tools to interact with the database.
+Use exact column names from the schema above.
+Explain results in plain, friendly language.
 If you are unsure what the user wants, ask a clarifying question.`;
+
+  // When a user asks about data, use the available tools to query the database.
+  // When a user wants to create, update or delete something, use the appropriate tool.
+  // Use the exact column names from the schema above — never guess or rename them.
+  // Only reference fields that are explicitly defined in the tool's input schema. Never assume, invent, or infer fields, types, or default values that are not explicitly listed.
+  // When asked which fields are required, answer ONLY from the tool's required array. If a field is not in the required array it is optional — do not speculate about whether it might default or be set automatically.
+  // Then explain the results in plain, friendly language.
+  // Never show raw JSON or technical details — always interpret results naturally.
+
   // console.log(result);
   return result;
 }
