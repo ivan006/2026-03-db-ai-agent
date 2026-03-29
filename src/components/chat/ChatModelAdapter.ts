@@ -89,9 +89,10 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
         for (const r of toolResults) {
           if (r._error) {
-            const errMsg = `- Hmm, that didn't quite work. Let me try a different approach...\n`;
-            yield { content: [{ type: "text" as const, text: errMsg }] };
-            accumulatedText += errMsg;
+            accumulatedText += `- Hmm, that didn't quite work. Let me try a different approach...\n`;
+            yield {
+              content: [{ type: "text" as const, text: accumulatedText }],
+            };
           }
         }
 
@@ -150,10 +151,10 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               })
               .join("\n");
 
-            yield {
-              content: [{ type: "text" as const, text: `${nextStep}\n` }],
-            };
             accumulatedText += `${nextStep}\n`;
+            yield {
+              content: [{ type: "text" as const, text: accumulatedText }],
+            };
             const nextResults = await Promise.all(
               nextToolBlocks.map(async (block: any) => {
                 console.log("[IA] executing tool:", block.name, block.input);
@@ -176,9 +177,10 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
             for (const r of nextResults) {
               if (r._error) {
-                const errMsg = `- Hmm, that didn't quite work. Let me try a different approach...\n`;
-                yield { content: [{ type: "text" as const, text: errMsg }] };
-                accumulatedText += errMsg;
+                accumulatedText += `- Hmm, that didn't quite work. Let me try a different approach...\n`;
+                yield {
+                  content: [{ type: "text" as const, text: accumulatedText }],
+                };
               }
             }
             lastResults = nextResults;
