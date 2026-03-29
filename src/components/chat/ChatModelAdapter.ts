@@ -45,26 +45,28 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           (b: any) => b.type === "tool_use",
         );
 
-        // Show user what we're doing
-        const toolSummary = toolUseBlocks
+        // Contextual opening message based on what we're about to do
+        const firstStep = toolUseBlocks
           .map((b: any) => {
             const action = b.name.split("_")[0];
-            const table = b.name.split("_").slice(1).join("_");
+            const table = b.name
+              .split("_")
+              .slice(1)
+              .join("_")
+              .replace(/_/g, " ");
             return action === "query"
-              ? `Fetching ${table}...`
+              ? `Looking up your ${table}...`
               : action === "create"
-                ? `Creating ${table}...`
+                ? `Creating a new ${table} record...`
                 : action === "update"
-                  ? `Updating ${table}...`
+                  ? `Updating the ${table}...`
                   : action === "delete"
-                    ? `Deleting from ${table}...`
-                    : `Running ${b.name}...`;
+                    ? `Removing that ${table}...`
+                    : `Working on it...`;
           })
-          .join("\n");
+          .join(" ");
 
-        yield {
-          content: [{ type: "text" as const, text: `_${toolSummary}_` }],
-        };
+        yield { content: [{ type: "text" as const, text: firstStep }] };
 
         const toolResults = await Promise.all(
           toolUseBlocks.map(async (block: any) => {
@@ -74,6 +76,8 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               type: "tool_result" as const,
               tool_use_id: block.id,
               content: result,
+              _name: block.name,
+              _result: result,
             };
           }),
         );
@@ -81,8 +85,13 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         let followUpMessages: any[] = [
           ...formattedMessages,
           { role: "assistant", content: data.content },
-          { role: "user", content: toolResults },
+          {
+            role: "user",
+            content: toolResults.map(({ _name, _result, ...rest }) => rest),
+          },
         ];
+
+        let lastResults = toolResults;
 
         while (true) {
           const followUpData = await fetchClaude(
@@ -103,23 +112,33 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             const nextToolBlocks = followUpData.content.filter(
               (b: any) => b.type === "tool_use",
             );
-            const nextSummary = nextToolBlocks
+
+            // Contextual message: what we found + what we're doing next
+            const prevTables = lastResults
+              .map((r: any) => r._name.split("_").slice(1).join(" "))
+              .join(", ");
+            const nextStep = nextToolBlocks
               .map((b: any) => {
                 const action = b.name.split("_")[0];
-                const table = b.name.split("_").slice(1).join("_");
+                const table = b.name
+                  .split("_")
+                  .slice(1)
+                  .join("_")
+                  .replace(/_/g, " ");
                 return action === "query"
-                  ? `Fetching ${table}...`
+                  ? `Got the ${prevTables}, now fetching ${table}...`
                   : action === "create"
-                    ? `Creating ${table}...`
+                    ? `Got the ${prevTables}, creating ${table}...`
                     : action === "update"
-                      ? `Updating ${table}...`
+                      ? `Got the ${prevTables}, updating ${table}...`
                       : action === "delete"
-                        ? `Deleting from ${table}...`
-                        : `Running ${b.name}...`;
+                        ? `Got the ${prevTables}, removing ${table}...`
+                        : `Got the ${prevTables}, continuing...`;
               })
-              .join("\n");
+              .join(" ");
+
             yield {
-              content: [{ type: "text" as const, text: `_${nextSummary}_` }],
+              content: [{ type: "text" as const, text: `\n${nextStep}` }],
             };
             const nextResults = await Promise.all(
               nextToolBlocks.map(async (block: any) => {
@@ -129,15 +148,29 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
                   type: "tool_result" as const,
                   tool_use_id: block.id,
                   content: result,
+                  _name: block.name,
+                  _result: result,
                 };
               }),
             );
+            lastResults = nextResults;
             followUpMessages = [
               ...followUpMessages,
               { role: "assistant", content: followUpData.content },
-              { role: "user", content: nextResults },
+              {
+                role: "user",
+                content: nextResults.map(({ _name, _result, ...rest }) => rest),
+              },
             ];
           } else {
+            yield {
+              content: [
+                {
+                  type: "text" as const,
+                  text: `\nGot everything, putting it together...\n\n`,
+                },
+              ],
+            };
             const text = followUpData.content
               .filter((b: any) => b.type === "text")
               .map((b: any) => b.text)

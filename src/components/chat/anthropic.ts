@@ -152,6 +152,7 @@ ${schemaLines}
 
 Use the available tools to interact with the database.
 Use exact column names from the schema above.
+NEVER confirm a create, update or delete action without a successful tool call result. If you have not called a tool, you have not made any changes.
 Explain results in plain, friendly language.
 If you are unsure what the user wants, ask a clarifying question.`;
 
