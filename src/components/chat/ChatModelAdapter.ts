@@ -74,15 +74,15 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             console.log("[IA] executing tool:", block.name, block.input);
             const result = await executeTool(block.name, block.input);
             const parsed = JSON.parse(result);
-            console.log("[IA] tool result:", block.name, parsed);
             return {
               type: "tool_result" as const,
               tool_use_id: block.id,
               content: result,
               _name: block.name,
-              _error: parsed?.code
-                ? (parsed.message ?? "something went wrong")
-                : null,
+              _error:
+                parsed?.error || parsed?.code
+                  ? (parsed.message ?? parsed.error ?? "something went wrong")
+                  : null,
             };
           }),
         );
@@ -159,15 +159,17 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
                 console.log("[IA] executing tool:", block.name, block.input);
                 const result = await executeTool(block.name, block.input);
                 const parsed = JSON.parse(result);
-                console.log("[IA] tool result:", block.name, parsed);
                 return {
                   type: "tool_result" as const,
                   tool_use_id: block.id,
                   content: result,
                   _name: block.name,
-                  _error: parsed?.code
-                    ? (parsed.message ?? "something went wrong")
-                    : null,
+                  _error:
+                    parsed?.error || parsed?.code
+                      ? (parsed.message ??
+                        parsed.error ??
+                        "something went wrong")
+                      : null,
                 };
               }),
             );
