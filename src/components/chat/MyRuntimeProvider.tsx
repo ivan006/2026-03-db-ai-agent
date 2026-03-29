@@ -1,34 +1,44 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   AssistantRuntimeProvider,
   useLocalRuntime,
-  useAssistantTool,
+  useAui,
+  Tools,
+  type Toolkit,
 } from "@assistant-ui/react";
 import { createIAModelAdapter } from "./ChatModelAdapter";
-import { executeTool, buildToolsFromSchema } from "./supabase";
+import { executeTool } from "./supabase";
+import toolsJson from "./tools.json";
 
 interface MyRuntimeProviderProps {
   children: ReactNode;
   personality: string;
 }
 
-// Registers all DB tools with the assistant-ui runtime so it can
-// execute them and handle the agentic loop automatically.
-function DynamicTools() {
-  const tools = buildToolsFromSchema();
-
-  for (const tool of tools) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useAssistantTool({
-      toolName: tool.name,
+function buildToolkit(): Toolkit {
+  const toolkit: Toolkit = {};
+  for (const tool of toolsJson as any[]) {
+    if (tool.name === "list_tables") continue;
+    const match = tool.name.match(/^(query|create|update|delete)_(.+)$/);
+    if (!match) continue;
+    toolkit[tool.name] = {
+      description: tool.description,
+      parameters: tool.input_schema,
       execute: async (args: Record<string, unknown>) => {
+        console.log("[IA] executing tool:", tool.name, args);
         const result = await executeTool(tool.name, args);
         return JSON.parse(result);
       },
-    });
+    };
   }
+  return toolkit;
+}
 
-  return null;
+const toolkit = buildToolkit();
+
+function RuntimeInner({ children }: { children: ReactNode }) {
+  useAui({ tools: Tools({ toolkit }) });
+  return <>{children}</>;
 }
 
 export function MyRuntimeProvider({
@@ -39,8 +49,7 @@ export function MyRuntimeProvider({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <DynamicTools />
-      {children}
+      <RuntimeInner>{children}</RuntimeInner>
     </AssistantRuntimeProvider>
   );
 }

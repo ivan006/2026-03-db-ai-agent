@@ -60,7 +60,10 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 }
 
 // ── Tool generation ───────────────────────────────────────────────
-// Tools are pre-built by extract-schema.js — just return them directly.
+// tools.json is the full source of truth.
+// At runtime we strip enum values and description strings from field
+// properties — Claude already has that detail from the system prompt
+// schema lines, so the tool payload only needs type + required.
 
 export type IATool = {
   name: string;
@@ -68,9 +71,42 @@ export type IATool = {
   input_schema: object;
 };
 
+function slimProperties(props: Record<string, any>): Record<string, any> {
+  const slimmed: Record<string, any> = {};
+  for (const [key, def] of Object.entries(props)) {
+    // Keep only type, drop enum, description, nullable etc
+    slimmed[key] = { type: def.type ?? "string" };
+  }
+  return slimmed;
+}
+
+function slimTool(tool: any): IATool {
+  const schema = tool.input_schema as any;
+  if (!schema?.properties) return tool;
+
+  const slimSchema = { ...schema, properties: {} as Record<string, any> };
+
+  for (const [key, val] of Object.entries(
+    schema.properties as Record<string, any>,
+  )) {
+    if (val.type === "object" && val.properties) {
+      slimSchema.properties[key] = {
+        ...val,
+        properties: slimProperties(val.properties),
+      };
+    } else {
+      slimSchema.properties[key] = { type: val.type ?? "string" };
+    }
+  }
+
+  return { ...tool, input_schema: slimSchema };
+}
+
 export function buildToolsFromSchema(): IATool[] {
-  console.log("[IA] tools loaded:", (prebuiltTools as IATool[]).length);
-  return prebuiltTools as IATool[];
+  const tools = prebuiltTools as IATool[];
+  const slimmed = tools.map(slimTool);
+  console.log("[IA] tools loaded:", slimmed.length);
+  return slimmed;
 }
 
 // ── Tool Execution ────────────────────────────────────────────────
