@@ -39,6 +39,7 @@ export function buildSystemPrompt(
   personality: string = "",
   user: SessionUser | null = null,
 ): string {
+  // ── What can I do (table + allowed operations) ───────────────────
   const tableMap: Record<string, string[]> = {};
   for (const tool of tools) {
     if (tool.name === "list_tables") continue;
@@ -47,7 +48,7 @@ export function buildSystemPrompt(
     const [, cmd, tablename] = match;
     const action =
       cmd === "query"
-        ? "view"
+        ? "query"
         : cmd === "create"
           ? "create"
           : cmd === "update"
@@ -58,10 +59,11 @@ export function buildSystemPrompt(
   }
 
   const capabilityLines = Object.entries(tableMap)
-    .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
+    .map(([table, actions]) => `  ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  // Build relationship map from query tool descriptions: col → referencedTable
+  // ── How must I do it (field detail per table) ─────────────────────
+  // Built from create tools (have required + properties) + query tools (have FK hints)
   const relMap: Record<string, Record<string, string>> = {};
   for (const t of tools) {
     const match = t.name.match(/^query_(.+)$/);
@@ -74,27 +76,50 @@ export function buildSystemPrompt(
     }
   }
 
-  // Derive schema lines from create tools — they have both properties and required arrays
-  const schemaLines = tools
-    .filter((t) => t.name.startsWith("create_"))
-    .map((t) => {
-      const tablename = t.name.replace("create_", "");
-      const data = (t.input_schema as any)?.properties?.data ?? {};
-      const props = data.properties ?? {};
-      const required: string[] = data.required ?? [];
+  // For tables with no create tool, fall back to query tool properties
+  const schemaLines = Object.keys(tableMap)
+    .map((tablename) => {
+      const createTool = tools.find((t) => t.name === `create_${tablename}`);
+      const queryTool = tools.find((t) => t.name === `query_${tablename}`);
+      const ops = tableMap[tablename].join(", ");
       const rels = relMap[tablename] ?? {};
-      const cols = Object.entries(props)
-        .map(([col, def]: [string, any]) => {
-          const type = def.enum ? `enum(${def.enum.join("|")})` : def.type;
-          const req = required.includes(col) ? "" : "?";
-          const link = rels[col] ? `(→${rels[col]})` : "";
-          return `${col}:${type}${req}${link}`;
-        })
-        .join(", ");
-      return `  ${tablename}: ${cols}`;
+
+      let colStr = "";
+      if (createTool) {
+        const data = (createTool.input_schema as any)?.properties?.data ?? {};
+        const props = data.properties ?? {};
+        const required: string[] = data.required ?? [];
+        colStr = Object.entries(props)
+          .map(([col, def]: [string, any]) => {
+            const type = def.enum
+              ? `:enum(${def.enum.join("|")})`
+              : def.type !== "string"
+                ? `:${def.type}`
+                : "";
+            const req = required.includes(col) ? "*" : "";
+            const link = rels[col] ? `(→${rels[col]})` : "";
+            return `${col}${link}${type}${req}`;
+          })
+          .join(", ");
+      } else if (queryTool) {
+        const props =
+          (queryTool.input_schema as any)?.properties?.filters?.properties ??
+          {};
+        colStr = Object.entries(props)
+          .map(([col, def]: [string, any]) => {
+            const type = (def as any).enum
+              ? `:enum(${(def as any).enum.join("|")})`
+              : "";
+            const link = rels[col] ? `(→${rels[col]})` : "";
+            return `${col}${link}${type}`;
+          })
+          .join(", ");
+      }
+
+      return `  ${tablename} [${ops}]: ${colStr}`;
     })
     .join("\n");
-  // console.log(schemaLines);
+
   const personalitySection = personality
     ? `## Personality\n${personality}\n`
     : "";
@@ -121,7 +146,7 @@ ${capabilityLines}
 What would you like to do?
 
 ## Database schema
-Fields marked with ? are optional. All others are required on create:
+* = required on create. (→table) = links to another table. enum(...) = allowed values.
 
 ${schemaLines}
 
