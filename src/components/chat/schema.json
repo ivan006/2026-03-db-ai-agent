@@ -2,9 +2,9 @@
   {
     "name": "list_tables",
     "description": "Lists all available tables in the database.",
-    "strict": true,
     "input_schema": {
       "type": "object",
+      "additionalProperties": false,
       "properties": {},
       "required": []
     }
@@ -12,7 +12,6 @@
   {
     "name": "query_agencies",
     "description": "Fetches records from agencies.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -53,7 +52,6 @@
   {
     "name": "create_agencies",
     "description": "Creates a new record in agencies.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -98,7 +96,6 @@
   {
     "name": "update_agencies",
     "description": "Updates a record in agencies by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -146,7 +143,6 @@
   {
     "name": "delete_agencies",
     "description": "Deletes a record from agencies by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -163,7 +159,6 @@
   {
     "name": "query_agents",
     "description": "Fetches records from agents. Related: agency_id → agencies.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -202,7 +197,6 @@
   {
     "name": "create_agents",
     "description": "Creates a new record in agents.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -248,7 +242,6 @@
   {
     "name": "update_agents",
     "description": "Updates a record in agents by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -294,7 +287,6 @@
   {
     "name": "delete_agents",
     "description": "Deletes a record from agents by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -311,7 +303,6 @@
   {
     "name": "query_clients",
     "description": "Fetches records from clients. Related: agency_id → agencies.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -378,7 +369,6 @@
   {
     "name": "create_clients",
     "description": "Creates a new record in clients.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -449,7 +439,6 @@
   {
     "name": "update_clients",
     "description": "Updates a record in clients by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -523,7 +512,6 @@
   {
     "name": "delete_clients",
     "description": "Deletes a record from clients by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -540,7 +528,6 @@
   {
     "name": "query_compliance_certificates",
     "description": "Fetches records from compliance_certificates. Related: deal_id → deals.id, document_id → documents.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -569,7 +556,6 @@
   {
     "name": "create_compliance_certificates",
     "description": "Creates a new record in compliance_certificates.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -604,7 +590,6 @@
   {
     "name": "update_compliance_certificates",
     "description": "Updates a record in compliance_certificates by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -640,7 +625,6 @@
   {
     "name": "delete_compliance_certificates",
     "description": "Deletes a record from compliance_certificates by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -657,7 +641,6 @@
   {
     "name": "query_deal_activity_log",
     "description": "Fetches records from deal_activity_log. Related: deal_id → deals.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -692,7 +675,6 @@
   {
     "name": "create_deal_activity_log",
     "description": "Creates a new record in deal_activity_log.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -733,7 +715,6 @@
   {
     "name": "update_deal_activity_log",
     "description": "Updates a record in deal_activity_log by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -775,7 +756,6 @@
   {
     "name": "delete_deal_activity_log",
     "description": "Deletes a record from deal_activity_log by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -792,7 +772,6 @@
   {
     "name": "query_deal_participants",
     "description": "Fetches records from deal_participants. Related: client_id → clients.id, deal_id → deals.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -824,7 +803,6 @@
   {
     "name": "create_deal_participants",
     "description": "Creates a new record in deal_participants.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -862,7 +840,6 @@
   {
     "name": "update_deal_participants",
     "description": "Updates a record in deal_participants by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -901,7 +878,6 @@
   {
     "name": "delete_deal_participants",
     "description": "Deletes a record from deal_participants by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -918,7 +894,6 @@
   {
     "name": "query_deals",
     "description": "Fetches records from deals. Related: agency_id → agencies.id, agent_id → agents.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -963,7 +938,6 @@
   {
     "name": "create_deals",
     "description": "Creates a new record in deals.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1015,7 +989,6 @@
   {
     "name": "update_deals",
     "description": "Updates a record in deals by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1067,7 +1040,6 @@
   {
     "name": "delete_deals",
     "description": "Deletes a record from deals by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1084,7 +1056,6 @@
   {
     "name": "query_document_versions",
     "description": "Fetches records from document_versions. Related: document_id → documents.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1116,7 +1087,6 @@
   {
     "name": "create_document_versions",
     "description": "Creates a new record in document_versions.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1153,7 +1123,6 @@
   {
     "name": "update_document_versions",
     "description": "Updates a record in document_versions by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1192,7 +1161,6 @@
   {
     "name": "delete_document_versions",
     "description": "Deletes a record from document_versions by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1209,7 +1177,6 @@
   {
     "name": "query_documents",
     "description": "Fetches records from documents. Related: client_id → clients.id, deal_id → deals.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1267,7 +1234,6 @@
   {
     "name": "create_documents",
     "description": "Creates a new record in documents.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1332,7 +1298,6 @@
   {
     "name": "update_documents",
     "description": "Updates a record in documents by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1397,7 +1362,6 @@
   {
     "name": "delete_documents",
     "description": "Deletes a record from documents by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1414,7 +1378,6 @@
   {
     "name": "query_esignature_placements",
     "description": "Fetches records from esignature_placements. Related: esignature_request_id → esignature_requests.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1458,7 +1421,6 @@
   {
     "name": "create_esignature_placements",
     "description": "Creates a new record in esignature_placements.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1508,7 +1470,6 @@
   {
     "name": "update_esignature_placements",
     "description": "Updates a record in esignature_placements by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1559,7 +1520,6 @@
   {
     "name": "delete_esignature_placements",
     "description": "Deletes a record from esignature_placements by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1576,7 +1536,6 @@
   {
     "name": "query_esignature_requests",
     "description": "Fetches records from esignature_requests. Related: client_id → clients.id, created_by_agent_id → agents.id, deal_id → deals.id, document_id → documents.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1626,7 +1585,6 @@
   {
     "name": "create_esignature_requests",
     "description": "Creates a new record in esignature_requests.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1681,7 +1639,6 @@
   {
     "name": "update_esignature_requests",
     "description": "Updates a record in esignature_requests by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1738,7 +1695,6 @@
   {
     "name": "delete_esignature_requests",
     "description": "Deletes a record from esignature_requests by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1755,7 +1711,6 @@
   {
     "name": "query_esignature_tokens",
     "description": "Fetches records from esignature_tokens. Related: esignature_request_id → esignature_requests.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1784,7 +1739,6 @@
   {
     "name": "create_esignature_tokens",
     "description": "Creates a new record in esignature_tokens.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1818,7 +1772,6 @@
   {
     "name": "update_esignature_tokens",
     "description": "Updates a record in esignature_tokens by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1854,7 +1807,6 @@
   {
     "name": "delete_esignature_tokens",
     "description": "Deletes a record from esignature_tokens by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1871,7 +1823,6 @@
   {
     "name": "query_follow_up_log",
     "description": "Fetches records from follow_up_log. Related: client_id → clients.id, deal_id → deals.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1900,7 +1851,6 @@
   {
     "name": "create_follow_up_log",
     "description": "Creates a new record in follow_up_log.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1934,7 +1884,6 @@
   {
     "name": "update_follow_up_log",
     "description": "Updates a record in follow_up_log by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1970,7 +1919,6 @@
   {
     "name": "delete_follow_up_log",
     "description": "Deletes a record from follow_up_log by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -1987,7 +1935,6 @@
   {
     "name": "query_notifications",
     "description": "Fetches records from notifications. Related: agent_id → agents.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2016,7 +1963,6 @@
   {
     "name": "create_notifications",
     "description": "Creates a new record in notifications.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2050,7 +1996,6 @@
   {
     "name": "update_notifications",
     "description": "Updates a record in notifications by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2086,7 +2031,6 @@
   {
     "name": "delete_notifications",
     "description": "Deletes a record from notifications by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2103,7 +2047,6 @@
   {
     "name": "query_participant_doc_requirements",
     "description": "Fetches records from participant_doc_requirements. Related: client_id → clients.id, deal_id → deals.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2135,7 +2078,6 @@
   {
     "name": "create_participant_doc_requirements",
     "description": "Creates a new record in participant_doc_requirements.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2173,7 +2115,6 @@
   {
     "name": "update_participant_doc_requirements",
     "description": "Updates a record in participant_doc_requirements by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2212,7 +2153,6 @@
   {
     "name": "delete_participant_doc_requirements",
     "description": "Deletes a record from participant_doc_requirements by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2229,7 +2169,6 @@
   {
     "name": "query_upload_tokens",
     "description": "Fetches records from upload_tokens. Related: client_id → clients.id, deal_id → deals.id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2258,7 +2197,6 @@
   {
     "name": "create_upload_tokens",
     "description": "Creates a new record in upload_tokens.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2293,7 +2231,6 @@
   {
     "name": "update_upload_tokens",
     "description": "Updates a record in upload_tokens by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
@@ -2329,7 +2266,6 @@
   {
     "name": "delete_upload_tokens",
     "description": "Deletes a record from upload_tokens by id.",
-    "strict": true,
     "input_schema": {
       "type": "object",
       "properties": {
