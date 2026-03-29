@@ -1,18 +1,15 @@
 // ── IA Orchestrator ───────────────────────────────────────────────
 // Manages the read → act → reply loop between Claude and Supabase.
-// Schema automatically extracted from src/schema.ts at build time.
-// Accepts an optional personality string injected into the system prompt.
-//
 // Two-model strategy:
-//   Haiku  — tool planning (deciding which tools to call, low token cost)
-//   Sonnet — final reply to user (natural language, personality, reasoning)
+//   Haiku  — tool planning (low token cost)
+//   Sonnet — final reply (natural language, personality, reasoning)
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { fetchClaude, buildSystemPrompt } from "./anthropic";
 import { buildToolsFromSchema, executeTool, getSessionUser } from "./supabase";
 
-const MODEL_PLANNER = "claude-haiku-4-5-20251001"; // tool selection — fast, cheap
-const MODEL_RESPONDER = "claude-sonnet-4-5"; // final reply — full quality
+const MODEL_PLANNER = "claude-haiku-4-5-20251001";
+const MODEL_RESPONDER = "claude-sonnet-4-5";
 
 export function createIAModelAdapter(personality: string): ChatModelAdapter {
   return {
@@ -23,13 +20,13 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
       const formattedMessages = messages.map((m) => ({
         role: m.role,
-        content: m.content
-          .filter((p): p is { type: "text"; text: string } => p.type === "text")
-          .map((p) => p.text)
+        content: (m.content as any[])
+          .filter((p: any) => p.type === "text")
+          .map((p: any) => p.text)
           .join(" "),
       }));
 
-      // Haiku decides which tools to call — low token cost
+      // Haiku decides which tools to call
       const data = await fetchClaude(
         {
           model: MODEL_PLANNER,
@@ -41,19 +38,14 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         abortSignal,
       );
 
+      if (data.error) throw new Error(data.error.message ?? "Claude API error");
+
       if (data.stop_reason === "tool_use") {
         const toolUseBlocks = data.content.filter(
           (b: any) => b.type === "tool_use",
         );
 
         if (toolUseBlocks.length > 0) {
-          yield {
-            content: [
-              { type: "text" as const, text: `_Working on it..._\n\n` },
-            ],
-          };
-
-          // Execute all tool calls in parallel
           const toolResults = await Promise.all(
             toolUseBlocks.map(async (block: any) => {
               const result = await executeTool(block.name, block.input);
@@ -65,15 +57,16 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             }),
           );
 
-          // Sonnet composes the final reply with full reasoning and personality
-          let followUpMessages = [
+          // Build conversation history for Sonnet
+          let followUpMessages: any[] = [
             ...formattedMessages,
             { role: "assistant", content: data.content },
             { role: "user", content: toolResults },
           ];
 
-          // Loop in case Sonnet also returns tool_use (e.g. multi-step create after query)
+          // Loop — Sonnet may need to call more tools before replying
           while (true) {
+            // Sonnet gets tools so it can chain calls if needed
             const followUpData = await fetchClaude(
               {
                 model: MODEL_RESPONDER,
@@ -85,12 +78,15 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               abortSignal,
             );
 
+            if (followUpData.error)
+              throw new Error(followUpData.error.message ?? "Claude API error");
+
             if (followUpData.stop_reason === "tool_use") {
-              const followUpToolBlocks = followUpData.content.filter(
+              const nextToolBlocks = followUpData.content.filter(
                 (b: any) => b.type === "tool_use",
               );
-              const followUpResults = await Promise.all(
-                followUpToolBlocks.map(async (block: any) => {
+              const nextResults = await Promise.all(
+                nextToolBlocks.map(async (block: any) => {
                   const result = await executeTool(block.name, block.input);
                   return {
                     type: "tool_result" as const,
@@ -102,7 +98,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               followUpMessages = [
                 ...followUpMessages,
                 { role: "assistant", content: followUpData.content },
-                { role: "user", content: followUpResults },
+                { role: "user", content: nextResults },
               ];
             } else {
               const text = followUpData.content
@@ -115,8 +111,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           }
         }
       } else {
-        // No tools needed — Haiku already has the answer, but re-ask Sonnet
-        // so personality and response quality are consistent across all paths.
+        // No tools — Sonnet composes the reply directly
         const replyData = await fetchClaude(
           {
             model: MODEL_RESPONDER,
@@ -127,11 +122,13 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           abortSignal,
         );
 
+        if (replyData.error)
+          throw new Error(replyData.error.message ?? "Claude API error");
+
         const text = replyData.content
           .filter((b: any) => b.type === "text")
           .map((b: any) => b.text)
           .join("");
-
         yield { content: [{ type: "text" as const, text }] };
       }
     },
