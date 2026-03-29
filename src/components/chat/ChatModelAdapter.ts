@@ -9,7 +9,11 @@
 //   💬 ...         — Sonnet composing (always last, always once)
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
-import { fetchClaude, buildSystemPrompt } from "./anthropic";
+import {
+  fetchClaude,
+  buildPlannerPrompt,
+  buildResponderPrompt,
+} from "./anthropic";
 import { buildToolsFromSchema, executeTool, getSessionUser } from "./supabase";
 
 const MODEL_PLANNER = "claude-haiku-4-5-20251001";
@@ -20,7 +24,8 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
     async *run({ messages, abortSignal }) {
       const tools = buildToolsFromSchema();
       const user = await getSessionUser();
-      const systemPrompt = buildSystemPrompt(tools, personality, user);
+      const plannerPrompt = buildPlannerPrompt(user);
+      const responderPrompt = buildResponderPrompt(tools, personality, user);
 
       const formattedMessages = messages.map((m) => ({
         role: m.role,
@@ -57,8 +62,9 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           {
             model: MODEL_PLANNER,
             max_tokens: 400,
-            system: systemPrompt,
+            system: plannerPrompt,
             tools,
+            tool_choice: { type: "any" },
             messages: plannerMessages,
           },
           abortSignal,
@@ -188,7 +194,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         {
           model: MODEL_RESPONDER,
           max_tokens: 1000,
-          system: systemPrompt,
+          system: responderPrompt,
           messages: sonnetMessages,
         },
         abortSignal,

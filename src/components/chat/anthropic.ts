@@ -64,25 +64,14 @@ function buildUserSection(user: SessionUser | null): string {
 // Terse and tool-focused. No personality, no schema detail.
 // Haiku's only job is to decide which tools to call and in what order.
 
-export function buildPlannerPrompt(
-  tools: IATool[],
-  user: SessionUser | null = null,
-): string {
+export function buildPlannerPrompt(user: SessionUser | null = null): string {
   const userSection = buildUserSection(user);
-  const tableMap = buildTableMap(tools);
-  const tableList = Object.entries(tableMap)
-    .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
-    .join("\n");
 
   return `You are a data retrieval planner. Your only job is to call the right tools to gather data needed to answer the user's request.
 Do not write replies or explanations — only call tools.
 If you must include text before a tool call, use 5 words or fewer. It will be shown as a process label.
 
-${userSection}
-## Available tables
-${tableList}
-
-Use exact column names. Skip filters where you don't have a value.`;
+${userSection}`;
 }
 
 // ── Responder prompt (Sonnet) ─────────────────────────────────────
@@ -183,7 +172,7 @@ What would you like to do?
 
 ${schemaLines}
 
-Present results clearly — each item on its own line/section.
+Present results clearly — use a key data point as the title for each record, not just a number.
 Explain results in plain, friendly language.
 If you are unsure what the user wants, ask a clarifying question.`;
 }
