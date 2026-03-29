@@ -3,6 +3,7 @@ import {
   AssistantRuntimeProvider,
   useLocalRuntime,
   useAui,
+  AuiProvider,
   Tools,
   type Toolkit,
 } from "@assistant-ui/react";
@@ -22,6 +23,7 @@ function buildToolkit(): Toolkit {
     const match = tool.name.match(/^(query|create|update|delete)_(.+)$/);
     if (!match) continue;
     toolkit[tool.name] = {
+      type: "frontend",
       description: tool.description,
       parameters: tool.input_schema,
       execute: async (args: Record<string, unknown>) => {
@@ -48,8 +50,10 @@ export function MyRuntimeProvider({
   const runtime = useLocalRuntime(createIAModelAdapter(personality));
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <RuntimeInner>{children}</RuntimeInner>
-    </AssistantRuntimeProvider>
+    <AuiProvider>
+      <AssistantRuntimeProvider runtime={runtime}>
+        <RuntimeInner>{children}</RuntimeInner>
+      </AssistantRuntimeProvider>
+    </AuiProvider>
   );
 }
