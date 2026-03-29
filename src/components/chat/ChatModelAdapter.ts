@@ -51,7 +51,6 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
       let plannerMessages = [...formattedMessages];
       let allToolResults: any[] = [];
-      let isFirst = true;
 
       while (true) {
         const planData = await fetchClaude(
@@ -83,15 +82,22 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           const toolUseBlocks = planData.content.filter(
             (b: any) => b.type === "tool_use",
           );
+          const textBlock = planData.content.find(
+            (b: any) => b.type === "text" && b.text,
+          );
 
-          // Show fetching steps
-          const fetchStep = toolUseBlocks
-            .map((b: any) => {
-              const table = b.name.split("_").slice(1).join(" ");
-              return `- 📦 Fetching ${table}...`;
-            })
-            .join("\n");
-          yield { content: [{ type: "text" as const, text: step(fetchStep) }] };
+          // Use Haiku's own description as the fetch group label
+          const fetchLabel = textBlock?.text
+            ? `- 📦 ${textBlock.text}`
+            : toolUseBlocks
+                .map(
+                  (b: any) =>
+                    `- 📦 Fetching ${b.name.split("_").slice(1).join(" ")}...`,
+                )
+                .join("\n");
+          yield {
+            content: [{ type: "text" as const, text: step(fetchLabel) }],
+          };
 
           // Execute all tools
           const toolResults = await Promise.all(
@@ -143,18 +149,18 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             },
           ];
 
-          // If more solving needed, show step
-          if (!isFirst) {
-            yield {
-              content: [
-                {
-                  type: "text" as const,
-                  text: step("- 🤔 Solving further..."),
-                },
-              ],
-            };
-          }
-          isFirst = false;
+          // Show solving step for next round
+          const solvingFor = toolUseBlocks
+            .map((b: any) => b.name.split("_").slice(1).join(" "))
+            .join(", ");
+          yield {
+            content: [
+              {
+                type: "text" as const,
+                text: step(`- 🤔 Solving for ${solvingFor}...`),
+              },
+            ],
+          };
         } else {
           // Haiku is done — break out of planning loop
           break;
@@ -183,7 +189,6 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           model: MODEL_RESPONDER,
           max_tokens: 1000,
           system: systemPrompt,
-          // No tools — Sonnet only writes, never fetches
           messages: sonnetMessages,
         },
         abortSignal,
