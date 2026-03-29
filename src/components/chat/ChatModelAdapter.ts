@@ -4,7 +4,7 @@
 //   Phase 2 — Sonnet gets all context and writes the reply (no tools)
 //
 // Process log:
-//   🤔 Solving x   — Haiku planning/replanning
+//   🤔 Thinking   — Haiku planning/replanning
 //   📦 Fetching x  — Supabase data call
 //   💬 ...         — Sonnet composing (always last, always once)
 
@@ -49,7 +49,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         content: [
           {
             type: "text" as const,
-            text: step(`- 🤔 Solving "${userText}"...`),
+            text: step(`- 🤔 Hmmm...`),
           },
         ],
       };
@@ -162,7 +162,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             content: [
               {
                 type: "text" as const,
-                text: step(`- 🤔 Solving for ${solvingFor}...`),
+                text: step(`- 🤔 Hmmm...`),
               },
             ],
           };
@@ -186,7 +186,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         content: [
           {
             type: "text" as const,
-            text: step("- 💬 How can I put this together..."),
+            text: step("- 💬 How can I put this..."),
           },
         ],
       };
