@@ -66,8 +66,8 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           })
           .join(" ");
 
-        let accumulatedText = firstStep;
-        yield { content: [{ type: "text" as const, text: firstStep }] };
+        let accumulatedText = firstStep + "\n";
+        yield { content: [{ type: "text" as const, text: firstStep + "\n" }] };
 
         const toolResults = await Promise.all(
           toolUseBlocks.map(async (block: any) => {
@@ -139,9 +139,9 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               .join(" ");
 
             yield {
-              content: [{ type: "text" as const, text: `\n${nextStep}` }],
+              content: [{ type: "text" as const, text: `\n${nextStep}\n` }],
             };
-            accumulatedText += `\n${nextStep}`;
+            accumulatedText += `\n${nextStep}\n`;
             const nextResults = await Promise.all(
               nextToolBlocks.map(async (block: any) => {
                 console.log("[IA] executing tool:", block.name, block.input);
