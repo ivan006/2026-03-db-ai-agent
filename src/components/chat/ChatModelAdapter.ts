@@ -66,30 +66,53 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           );
 
           // Sonnet composes the final reply with full reasoning and personality
-          const followUpData = await fetchClaude(
-            {
-              model: MODEL_RESPONDER,
-              max_tokens: 1000,
-              system: systemPrompt,
-              tools,
-              messages: [
-                ...formattedMessages,
-                { role: "assistant", content: data.content },
-                {
-                  role: "user",
-                  content: toolResults,
-                },
-              ],
-            },
-            abortSignal,
-          );
+          let followUpMessages = [
+            ...formattedMessages,
+            { role: "assistant", content: data.content },
+            { role: "user", content: toolResults },
+          ];
 
-          const text = followUpData.content
-            .filter((b: any) => b.type === "text")
-            .map((b: any) => b.text)
-            .join("");
+          // Loop in case Sonnet also returns tool_use (e.g. multi-step create after query)
+          while (true) {
+            const followUpData = await fetchClaude(
+              {
+                model: MODEL_RESPONDER,
+                max_tokens: 1000,
+                system: systemPrompt,
+                tools,
+                messages: followUpMessages,
+              },
+              abortSignal,
+            );
 
-          yield { content: [{ type: "text" as const, text }] };
+            if (followUpData.stop_reason === "tool_use") {
+              const followUpToolBlocks = followUpData.content.filter(
+                (b: any) => b.type === "tool_use",
+              );
+              const followUpResults = await Promise.all(
+                followUpToolBlocks.map(async (block: any) => {
+                  const result = await executeTool(block.name, block.input);
+                  return {
+                    type: "tool_result" as const,
+                    tool_use_id: block.id,
+                    content: result,
+                  };
+                }),
+              );
+              followUpMessages = [
+                ...followUpMessages,
+                { role: "assistant", content: followUpData.content },
+                { role: "user", content: followUpResults },
+              ];
+            } else {
+              const text = followUpData.content
+                .filter((b: any) => b.type === "text")
+                .map((b: any) => b.text)
+                .join("");
+              yield { content: [{ type: "text" as const, text }] };
+              break;
+            }
+          }
         }
       } else {
         // No tools needed — Haiku already has the answer, but re-ask Sonnet
