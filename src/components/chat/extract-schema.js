@@ -131,11 +131,44 @@ function toJsonSchemaType(type) {
   return "string"; // text, uuid, json, timestamp etc all pass as string
 }
 
-// ── Build tools array ─────────────────────────────────────────────
+// ── Load policies ─────────────────────────────────────────────────
+// Builds a map of { tableName: Set<cmd> } for authenticated role.
+// CMD values: INSERT, SELECT, UPDATE, DELETE, ALL
 
-function buildTools(content, enums) {
+function buildPermissionMap(policiesPath) {
+  if (!fs.existsSync(policiesPath)) return null;
+
+  const policies = JSON.parse(fs.readFileSync(policiesPath, "utf8"));
+  const map = {};
+
+  for (const policy of policies) {
+    const { tablename, cmd, roles } = policy;
+    if (!roles.includes("authenticated")) continue;
+
+    if (!map[tablename]) map[tablename] = new Set();
+
+    if (cmd === "ALL") {
+      map[tablename].add("INSERT");
+      map[tablename].add("SELECT");
+      map[tablename].add("UPDATE");
+      map[tablename].add("DELETE");
+    } else {
+      map[tablename].add(cmd);
+    }
+  }
+
+  return map;
+}
+
+function buildTools(content, enums, permissions) {
+  // Helper: check if authenticated role has permission for a cmd on a table
+  const can = (tableName, cmd) => {
+    if (!permissions) return true; // no policies file — assume all allowed
+    return permissions[tableName]?.has(cmd) ?? false;
+  };
   const tools = [
     {
+      type: "custom",
       name: "list_tables",
       description: "Lists all available tables in the database.",
       input_schema: {
@@ -202,77 +235,85 @@ function buildTools(content, enums) {
       : "";
 
     // query
-    tools.push({
-      name: `query_${tableName}`,
-      description: `Fetches records from ${tableName}.${relHint}`,
-      input_schema: {
-        type: "object",
-        properties: {
-          filters: {
-            type: "object",
-            properties: colProperties,
-            required: [],
+    if (can(tableName, "SELECT"))
+      tools.push({
+        type: "custom",
+        name: `query_${tableName}`,
+        description: `Fetches records from ${tableName}.${relHint}`,
+        input_schema: {
+          type: "object",
+          properties: {
+            filters: {
+              type: "object",
+              properties: colProperties,
+              required: [],
+            },
           },
+          required: [],
         },
-        required: [],
-      },
-    });
+      });
 
     // create
-    tools.push({
-      name: `create_${tableName}`,
-      description: `Creates a new record in ${tableName}.`,
-      input_schema: {
-        type: "object",
-        properties: {
-          data: {
-            type: "object",
-            properties: colProperties,
-            required: requiredOnInsert,
+    if (can(tableName, "INSERT"))
+      tools.push({
+        type: "custom",
+        name: `create_${tableName}`,
+        description: `Creates a new record in ${tableName}.`,
+        input_schema: {
+          type: "object",
+          properties: {
+            data: {
+              type: "object",
+              properties: colProperties,
+              required: requiredOnInsert,
+            },
           },
+          required: ["data"],
         },
-        required: ["data"],
-      },
-    });
+      });
 
     // update
-    tools.push({
-      name: `update_${tableName}`,
-      description: `Updates a record in ${tableName} by id.`,
-      input_schema: {
-        type: "object",
-        properties: {
-          id: {
-            type: "string",
-            description:
-              "Record ID — must be a valid UUID from a prior query, never invented.",
+    if (can(tableName, "UPDATE"))
+      tools.push({
+        type: "custom",
+        name: `update_${tableName}`,
+        description: `Updates a record in ${tableName} by id.`,
+        input_schema: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description:
+                "Record ID — must be a valid UUID from a prior query, never invented.",
+            },
+            data: {
+              type: "object",
+              properties: colProperties,
+              required: [],
+            },
           },
-          data: {
-            type: "object",
-            properties: colProperties,
-            required: [],
-          },
+          required: ["id", "data"],
         },
-        required: ["id", "data"],
-      },
-    });
+      });
 
     // delete
-    tools.push({
-      name: `delete_${tableName}`,
-      description: `Deletes a record from ${tableName} by id.`,
-      input_schema: {
-        type: "object",
-        properties: {
-          id: {
-            type: "string",
-            description:
-              "Record ID — must be a valid UUID from a prior query, never invented.",
+    if (can(tableName, "DELETE"))
+      tools.push({
+        type: "custom",
+        name: `delete_${tableName}`,
+        description: `Deletes a record from ${tableName} by id.`,
+        input_schema: {
+          type: "object",
+          properties: {
+            id: {
+              type: "string",
+              description:
+                "Record ID — must be a valid UUID from a prior query, never invented.",
+            },
           },
+          required: ["id"],
         },
-        required: ["id"],
-      },
-    });
+      });
   }
 
   return tools;
@@ -316,9 +357,26 @@ async function main() {
   }
 
   const enums = parseEnums(input);
-  const tools = buildTools(input, enums);
 
-  const tableCount = (tools.length - 1) / 4; // subtract list_tables, 4 tools per table
+  // Load policies.json from same directory as input file if it exists
+  const policiesPath = inputArg
+    ? path.join(path.dirname(path.resolve(inputArg)), "policies.json")
+    : path.join(process.cwd(), "policies.json");
+
+  const permissions = buildPermissionMap(policiesPath);
+  if (permissions) {
+    console.log(`✓ policies.json loaded from ${policiesPath}`);
+  } else {
+    console.log(`  (no policies.json found — all operations included)`);
+  }
+
+  const tools = buildTools(input, enums, permissions);
+
+  const tableCount = new Set(
+    tools
+      .filter((t) => t.name !== "list_tables")
+      .map((t) => t.name.replace(/^(query|create|update|delete)_/, "")),
+  ).size;
   if (tableCount === 0) {
     console.error(
       "No tables found in input. Check that the file is valid Supabase CLI output.",

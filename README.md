@@ -50,3 +50,26 @@ node src/components/chat/extract-schema.js src/components/chat/raw-schema.ts
 ```
 
 This reads `raw-schema.ts` and outputs `src/components/chat/schema.json` — the file the IA uses at runtime. Re-run this any time your database schema changes.
+
+---
+
+### 4. Export your RLS policies
+
+The IA needs to know what operations are permitted so it doesn't attempt actions that will be blocked by Row Level Security.
+
+In your Supabase project dashboard, go to **SQL Editor** and run:
+
+```sql
+SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+ORDER BY tablename, cmd;
+```
+
+Click **Export** → **JSON** and save the file as:
+
+```
+src/components/chat/policies.json
+```
+
+This file is gitignored. Re-run and re-export any time your RLS policies change.
