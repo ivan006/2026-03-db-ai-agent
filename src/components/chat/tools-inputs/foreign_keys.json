@@ -1,0 +1,152 @@
+[
+  {
+    "table_name": "agents",
+    "column_name": "agency_id",
+    "referenced_table": "agencies",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "deals",
+    "column_name": "agency_id",
+    "referenced_table": "agencies",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "deals",
+    "column_name": "agent_id",
+    "referenced_table": "agents",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "clients",
+    "column_name": "agency_id",
+    "referenced_table": "agencies",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "deal_participants",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "deal_participants",
+    "column_name": "client_id",
+    "referenced_table": "clients",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "documents",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "documents",
+    "column_name": "client_id",
+    "referenced_table": "clients",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "compliance_certificates",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "compliance_certificates",
+    "column_name": "document_id",
+    "referenced_table": "documents",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "upload_tokens",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "upload_tokens",
+    "column_name": "client_id",
+    "referenced_table": "clients",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "notifications",
+    "column_name": "agent_id",
+    "referenced_table": "agents",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "participant_doc_requirements",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "participant_doc_requirements",
+    "column_name": "client_id",
+    "referenced_table": "clients",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "follow_up_log",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "follow_up_log",
+    "column_name": "client_id",
+    "referenced_table": "clients",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "deal_activity_log",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "esignature_requests",
+    "column_name": "deal_id",
+    "referenced_table": "deals",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "esignature_requests",
+    "column_name": "document_id",
+    "referenced_table": "documents",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "esignature_requests",
+    "column_name": "client_id",
+    "referenced_table": "clients",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "esignature_requests",
+    "column_name": "created_by_agent_id",
+    "referenced_table": "agents",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "esignature_tokens",
+    "column_name": "esignature_request_id",
+    "referenced_table": "esignature_requests",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "document_versions",
+    "column_name": "document_id",
+    "referenced_table": "documents",
+    "referenced_column": "id"
+  },
+  {
+    "table_name": "esignature_placements",
+    "column_name": "esignature_request_id",
+    "referenced_table": "esignature_requests",
+    "referenced_column": "id"
+  }
+]

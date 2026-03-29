@@ -1,0 +1,425 @@
+[
+  {
+    "tablename": "agencies",
+    "policyname": "Public can view agency branding",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "agencies",
+    "policyname": "Agents can view own agency",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(id = get_agent_agency_id(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "agencies",
+    "policyname": "Admins can update own agency",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "((id = get_agent_agency_id(auth.uid())) AND is_agency_admin(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "agents",
+    "policyname": "Admins can delete agents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "DELETE",
+    "qual": "((agency_id = get_agent_agency_id(auth.uid())) AND is_agency_admin(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "agents",
+    "policyname": "Admins can insert agents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "((agency_id = get_agent_agency_id(auth.uid())) AND is_agency_admin(auth.uid()))"
+  },
+  {
+    "tablename": "agents",
+    "policyname": "Agents can view agency members",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(agency_id = get_agent_agency_id(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "agents",
+    "policyname": "Admins can update agents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "((agency_id = get_agent_agency_id(auth.uid())) AND is_agency_admin(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "clients",
+    "policyname": "Agents can create clients",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(agency_id = get_agent_agency_id(auth.uid()))"
+  },
+  {
+    "tablename": "clients",
+    "policyname": "Agents can view agency clients",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(agency_id = get_agent_agency_id(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "clients",
+    "policyname": "Agents can update agency clients",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "(agency_id = get_agent_agency_id(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "compliance_certificates",
+    "policyname": "Agents can manage certificates",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = compliance_certificates.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))"
+  },
+  {
+    "tablename": "compliance_certificates",
+    "policyname": "Agents can view certificates",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = compliance_certificates.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "deal_activity_log",
+    "policyname": "Anon can insert activity",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "true"
+  },
+  {
+    "tablename": "deal_activity_log",
+    "policyname": "Agents can insert activity for their deals",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(deal_id IN ( SELECT deals.id\n   FROM deals\n  WHERE (deals.agent_id IN ( SELECT agents.id\n           FROM agents\n          WHERE (agents.id = auth.uid())))))"
+  },
+  {
+    "tablename": "deal_activity_log",
+    "policyname": "Agents can view activity for their deals",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(deal_id IN ( SELECT deals.id\n   FROM deals\n  WHERE (deals.agent_id IN ( SELECT agents.id\n           FROM agents\n          WHERE (agents.id = auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "deal_participants",
+    "policyname": "Agents can remove participants",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "DELETE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = deal_participants.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "deal_participants",
+    "policyname": "Agents can add participants",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = deal_participants.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))"
+  },
+  {
+    "tablename": "deal_participants",
+    "policyname": "Agents can view deal participants",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = deal_participants.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "deals",
+    "policyname": "Agents can create deals",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "((agency_id = get_agent_agency_id(auth.uid())) AND (agent_id = get_agent_id(auth.uid())))"
+  },
+  {
+    "tablename": "deals",
+    "policyname": "Agents can view own deals",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "((agency_id = get_agent_agency_id(auth.uid())) AND ((agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))",
+    "with_check": null
+  },
+  {
+    "tablename": "deals",
+    "policyname": "Agents can update own deals",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "((agency_id = get_agent_agency_id(auth.uid())) AND ((agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))",
+    "with_check": null
+  },
+  {
+    "tablename": "document_versions",
+    "policyname": "Agents manage document_versions",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "ALL",
+    "qual": "(document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.deal_id IN ( SELECT deals.id\n           FROM deals\n          WHERE (deals.agent_id IN ( SELECT agents.id\n                   FROM agents\n                  WHERE (agents.id = auth.uid())))))))",
+    "with_check": "(document_id IN ( SELECT documents.id\n   FROM documents\n  WHERE (documents.deal_id IN ( SELECT deals.id\n           FROM deals\n          WHERE (deals.agent_id IN ( SELECT agents.id\n                   FROM agents\n                  WHERE (agents.id = auth.uid())))))))"
+  },
+  {
+    "tablename": "document_versions",
+    "policyname": "Anon can insert document_versions",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "true"
+  },
+  {
+    "tablename": "document_versions",
+    "policyname": "Anon can read document_versions",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Clients can upload via token",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM upload_tokens\n  WHERE ((upload_tokens.deal_id = documents.deal_id) AND (upload_tokens.client_id = documents.client_id) AND (upload_tokens.expires_at > now()))))"
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Agents can upload documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = documents.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))"
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Agents can view deal documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = documents.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Agents can update documents",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = documents.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "esignature_placements",
+    "policyname": "Agents manage esignature_placements",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "ALL",
+    "qual": "true",
+    "with_check": "true"
+  },
+  {
+    "tablename": "esignature_placements",
+    "policyname": "Anon can insert esignature_placements",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "true"
+  },
+  {
+    "tablename": "esignature_placements",
+    "policyname": "Anon can read esignature_placements",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "esignature_placements",
+    "policyname": "Anon can update esignature_placements",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "UPDATE",
+    "qual": "true",
+    "with_check": "true"
+  },
+  {
+    "tablename": "esignature_requests",
+    "policyname": "Agents manage esignature_requests for their deals",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "ALL",
+    "qual": "(deal_id IN ( SELECT deals.id\n   FROM deals\n  WHERE (deals.agent_id IN ( SELECT agents.id\n           FROM agents\n          WHERE (agents.id = auth.uid())))))",
+    "with_check": "(deal_id IN ( SELECT deals.id\n   FROM deals\n  WHERE (deals.agent_id IN ( SELECT agents.id\n           FROM agents\n          WHERE (agents.id = auth.uid())))))"
+  },
+  {
+    "tablename": "esignature_requests",
+    "policyname": "Anon can read esignature_requests",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "esignature_requests",
+    "policyname": "Anon can update esignature_requests (sign/decline)",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "UPDATE",
+    "qual": "true",
+    "with_check": "true"
+  },
+  {
+    "tablename": "esignature_tokens",
+    "policyname": "Agents insert esignature_tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "true"
+  },
+  {
+    "tablename": "esignature_tokens",
+    "policyname": "Agents read esignature_tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "esignature_tokens",
+    "policyname": "Anon can read esignature_tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "esignature_tokens",
+    "policyname": "Anon can update esignature_tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "UPDATE",
+    "qual": "true",
+    "with_check": "true"
+  },
+  {
+    "tablename": "follow_up_log",
+    "policyname": "Agents can view follow up logs",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = follow_up_log.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "notifications",
+    "policyname": "Agents can view own notifications",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(agent_id = get_agent_id(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "notifications",
+    "policyname": "Agents can update own notifications",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "(agent_id = get_agent_id(auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "participant_doc_requirements",
+    "policyname": "Agents can manage doc requirements",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = participant_doc_requirements.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = participant_doc_requirements.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))"
+  },
+  {
+    "tablename": "participant_doc_requirements",
+    "policyname": "Agents can view doc requirements",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = participant_doc_requirements.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "upload_tokens",
+    "policyname": "Agents can create upload tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = upload_tokens.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))"
+  },
+  {
+    "tablename": "upload_tokens",
+    "policyname": "Public can validate upload tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{anon}",
+    "cmd": "SELECT",
+    "qual": "(expires_at > now())",
+    "with_check": null
+  },
+  {
+    "tablename": "upload_tokens",
+    "policyname": "Agents can view upload tokens",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM deals\n  WHERE ((deals.id = upload_tokens.deal_id) AND (deals.agency_id = get_agent_agency_id(auth.uid())) AND ((deals.agent_id = get_agent_id(auth.uid())) OR is_agency_admin(auth.uid())))))",
+    "with_check": null
+  }
+]

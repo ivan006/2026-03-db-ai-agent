@@ -1,0 +1,258 @@
+[
+  {
+    "enum_name": "aal_level",
+    "value": "aal1"
+  },
+  {
+    "enum_name": "aal_level",
+    "value": "aal2"
+  },
+  {
+    "enum_name": "aal_level",
+    "value": "aal3"
+  },
+  {
+    "enum_name": "action",
+    "value": "INSERT"
+  },
+  {
+    "enum_name": "action",
+    "value": "UPDATE"
+  },
+  {
+    "enum_name": "action",
+    "value": "DELETE"
+  },
+  {
+    "enum_name": "action",
+    "value": "TRUNCATE"
+  },
+  {
+    "enum_name": "action",
+    "value": "ERROR"
+  },
+  {
+    "enum_name": "agent_role",
+    "value": "admin"
+  },
+  {
+    "enum_name": "agent_role",
+    "value": "agent"
+  },
+  {
+    "enum_name": "buckettype",
+    "value": "STANDARD"
+  },
+  {
+    "enum_name": "buckettype",
+    "value": "ANALYTICS"
+  },
+  {
+    "enum_name": "buckettype",
+    "value": "VECTOR"
+  },
+  {
+    "enum_name": "certificate_type",
+    "value": "electrical"
+  },
+  {
+    "enum_name": "certificate_type",
+    "value": "gas"
+  },
+  {
+    "enum_name": "certificate_type",
+    "value": "beetle"
+  },
+  {
+    "enum_name": "certificate_type",
+    "value": "electric_fence"
+  },
+  {
+    "enum_name": "certificate_type",
+    "value": "plumbing"
+  },
+  {
+    "enum_name": "client_type",
+    "value": "person"
+  },
+  {
+    "enum_name": "client_type",
+    "value": "company"
+  },
+  {
+    "enum_name": "client_type",
+    "value": "trust"
+  },
+  {
+    "enum_name": "code_challenge_method",
+    "value": "s256"
+  },
+  {
+    "enum_name": "code_challenge_method",
+    "value": "plain"
+  },
+  {
+    "enum_name": "deal_status",
+    "value": "active"
+  },
+  {
+    "enum_name": "deal_status",
+    "value": "pending_docs"
+  },
+  {
+    "enum_name": "deal_status",
+    "value": "ready"
+  },
+  {
+    "enum_name": "deal_status",
+    "value": "closed"
+  },
+  {
+    "enum_name": "deal_status",
+    "value": "unconverted"
+  },
+  {
+    "enum_name": "deal_type",
+    "value": "sale"
+  },
+  {
+    "enum_name": "deal_type",
+    "value": "rental"
+  },
+  {
+    "enum_name": "document_status",
+    "value": "pending"
+  },
+  {
+    "enum_name": "document_status",
+    "value": "verified"
+  },
+  {
+    "enum_name": "document_status",
+    "value": "rejected"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "eq"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "neq"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "lt"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "lte"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "gt"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "gte"
+  },
+  {
+    "enum_name": "equality_op",
+    "value": "in"
+  },
+  {
+    "enum_name": "factor_status",
+    "value": "unverified"
+  },
+  {
+    "enum_name": "factor_status",
+    "value": "verified"
+  },
+  {
+    "enum_name": "factor_type",
+    "value": "totp"
+  },
+  {
+    "enum_name": "factor_type",
+    "value": "webauthn"
+  },
+  {
+    "enum_name": "factor_type",
+    "value": "phone"
+  },
+  {
+    "enum_name": "oauth_authorization_status",
+    "value": "pending"
+  },
+  {
+    "enum_name": "oauth_authorization_status",
+    "value": "approved"
+  },
+  {
+    "enum_name": "oauth_authorization_status",
+    "value": "denied"
+  },
+  {
+    "enum_name": "oauth_authorization_status",
+    "value": "expired"
+  },
+  {
+    "enum_name": "oauth_client_type",
+    "value": "public"
+  },
+  {
+    "enum_name": "oauth_client_type",
+    "value": "confidential"
+  },
+  {
+    "enum_name": "oauth_registration_type",
+    "value": "dynamic"
+  },
+  {
+    "enum_name": "oauth_registration_type",
+    "value": "manual"
+  },
+  {
+    "enum_name": "oauth_response_type",
+    "value": "code"
+  },
+  {
+    "enum_name": "one_time_token_type",
+    "value": "confirmation_token"
+  },
+  {
+    "enum_name": "one_time_token_type",
+    "value": "reauthentication_token"
+  },
+  {
+    "enum_name": "one_time_token_type",
+    "value": "recovery_token"
+  },
+  {
+    "enum_name": "one_time_token_type",
+    "value": "email_change_token_new"
+  },
+  {
+    "enum_name": "one_time_token_type",
+    "value": "email_change_token_current"
+  },
+  {
+    "enum_name": "one_time_token_type",
+    "value": "phone_change_token"
+  },
+  {
+    "enum_name": "participant_role",
+    "value": "buyer"
+  },
+  {
+    "enum_name": "participant_role",
+    "value": "seller"
+  },
+  {
+    "enum_name": "participant_role",
+    "value": "tenant"
+  },
+  {
+    "enum_name": "participant_role",
+    "value": "landlord"
+  }
+]
