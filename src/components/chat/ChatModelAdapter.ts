@@ -45,6 +45,27 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           (b: any) => b.type === "tool_use",
         );
 
+        // Show user what we're doing
+        const toolSummary = toolUseBlocks
+          .map((b: any) => {
+            const action = b.name.split("_")[0];
+            const table = b.name.split("_").slice(1).join("_");
+            return action === "query"
+              ? `Fetching ${table}...`
+              : action === "create"
+                ? `Creating ${table}...`
+                : action === "update"
+                  ? `Updating ${table}...`
+                  : action === "delete"
+                    ? `Deleting from ${table}...`
+                    : `Running ${b.name}...`;
+          })
+          .join("\n");
+
+        yield {
+          content: [{ type: "text" as const, text: `_${toolSummary}_` }],
+        };
+
         const toolResults = await Promise.all(
           toolUseBlocks.map(async (block: any) => {
             console.log("[IA] executing tool:", block.name, block.input);
@@ -82,6 +103,24 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             const nextToolBlocks = followUpData.content.filter(
               (b: any) => b.type === "tool_use",
             );
+            const nextSummary = nextToolBlocks
+              .map((b: any) => {
+                const action = b.name.split("_")[0];
+                const table = b.name.split("_").slice(1).join("_");
+                return action === "query"
+                  ? `Fetching ${table}...`
+                  : action === "create"
+                    ? `Creating ${table}...`
+                    : action === "update"
+                      ? `Updating ${table}...`
+                      : action === "delete"
+                        ? `Deleting from ${table}...`
+                        : `Running ${b.name}...`;
+              })
+              .join("\n");
+            yield {
+              content: [{ type: "text" as const, text: `_${nextSummary}_` }],
+            };
             const nextResults = await Promise.all(
               nextToolBlocks.map(async (block: any) => {
                 console.log("[IA] executing tool:", block.name, block.input);
