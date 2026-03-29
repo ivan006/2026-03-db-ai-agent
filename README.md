@@ -2,62 +2,69 @@
 
 ## Connecting your database
 
-### 1. Export your Supabase types
+The IA generates its tools from your Supabase database structure. You provide raw SQL exports, and the extractor builds the tools file automatically.
 
-In your Supabase project dashboard, go to **Project Settings → General** to find your project ID, then run:
+---
 
-```bash
-npx supabase gen types typescript --project-id your-project-id
+### 1. Create your tools-inputs folder
+
+Copy the example folder:
+
+```
+src/components/chat/tools-inputs-example/  →  src/components/chat/tools-inputs/
+```
+
+This folder is gitignored. The example folder shows the expected structure and format for each file.
+
+---
+
+### 2. Populate tools-inputs
+
+Run each of the following SQL queries in your **Supabase SQL Editor** and export the result as JSON into the corresponding file.
+
+---
+
+#### `tools-inputs/columns.json`
+
+```sql
+SELECT table_name, column_name, data_type, is_nullable, column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+ORDER BY table_name, ordinal_position;
 ```
 
 ---
 
-### 2. Copy the Database type
+#### `tools-inputs/foreign_keys.json`
 
-From the output, copy only the `Database` type object — everything from `export type Database = {` to its closing `}`.
-
-It looks like this:
-
-```typescript
-export type Database = {
-  public: {
-    Tables: {
-      your_table: {
-        Row: { ... }
-        Insert: { ... }
-        Update: { ... }
-      }
-    }
-    ...
-  }
-}
+```sql
+SELECT
+  kcu.table_name,
+  kcu.column_name,
+  ccu.table_name AS referenced_table,
+  ccu.column_name AS referenced_column
+FROM information_schema.key_column_usage kcu
+JOIN information_schema.referential_constraints rc
+  ON kcu.constraint_name = rc.constraint_name
+JOIN information_schema.constraint_column_usage ccu
+  ON rc.unique_constraint_name = ccu.constraint_name
+WHERE kcu.table_schema = 'public';
 ```
-
-Paste it into:
-
-```
-src/components/chat/raw-schema.ts
-```
-
-This file is gitignored.
 
 ---
 
-### 3. Generate schema.json
+#### `tools-inputs/enums.json`
 
-```bash
-node src/components/chat/extract-schema.js src/components/chat/raw-schema.ts
+```sql
+SELECT t.typname AS enum_name, e.enumlabel AS value
+FROM pg_type t
+JOIN pg_enum e ON t.oid = e.enumtypid
+ORDER BY t.typname, e.enumsortorder;
 ```
-
-This reads `raw-schema.ts` and outputs `src/components/chat/schema.json` — the file the IA uses at runtime. Re-run this any time your database schema changes.
 
 ---
 
-### 4. Export your RLS policies
-
-The IA needs to know what operations are permitted so it doesn't attempt actions that will be blocked by Row Level Security.
-
-In your Supabase project dashboard, go to **SQL Editor** and run:
+#### `tools-inputs/policies.json`
 
 ```sql
 SELECT tablename, policyname, permissive, roles, cmd, qual, with_check
@@ -66,10 +73,14 @@ WHERE schemaname = 'public'
 ORDER BY tablename, cmd;
 ```
 
-Click **Export** → **JSON** and save the file as:
+---
 
-```
-src/components/chat/policies.json
+### 3. Generate tools.json
+
+```bash
+node src/components/chat/extract-schema.js
 ```
 
-This file is gitignored. Re-run and re-export any time your RLS policies change.
+This reads all four files from `tools-inputs/` and outputs `src/components/chat/tools.json` — the file the IA uses at runtime.
+
+Re-run any time your database schema, relationships, enums, or policies change.
