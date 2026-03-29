@@ -32,7 +32,7 @@ function readStdin() {
 // Maps TypeScript types from the CLI output to friendly type names.
 
 function mapType(rawType) {
-  if (rawType.includes("Database[")) return "uuid"; // enum ref or FK
+  if (rawType.includes("Database[")) return "enum_ref"; // resolved later by enum resolution step
   const base = rawType.replace("| null", "").trim();
   const map = {
     string: "text",
@@ -138,6 +138,7 @@ function buildTools(content, enums) {
     {
       name: "list_tables",
       description: "Lists all available tables in the database.",
+      strict: true,
       input_schema: { type: "object", properties: {}, required: [] },
     },
   ];
@@ -200,6 +201,7 @@ function buildTools(content, enums) {
     tools.push({
       name: `query_${tableName}`,
       description: `Fetches records from ${tableName}.${relHint}`,
+      strict: true,
       input_schema: {
         type: "object",
         properties: {
@@ -217,6 +219,7 @@ function buildTools(content, enums) {
     tools.push({
       name: `create_${tableName}`,
       description: `Creates a new record in ${tableName}.`,
+      strict: true,
       input_schema: {
         type: "object",
         properties: {
@@ -234,6 +237,7 @@ function buildTools(content, enums) {
     tools.push({
       name: `update_${tableName}`,
       description: `Updates a record in ${tableName} by id.`,
+      strict: true,
       input_schema: {
         type: "object",
         properties: {
@@ -256,6 +260,7 @@ function buildTools(content, enums) {
     tools.push({
       name: `delete_${tableName}`,
       description: `Deletes a record from ${tableName} by id.`,
+      strict: true,
       input_schema: {
         type: "object",
         properties: {
