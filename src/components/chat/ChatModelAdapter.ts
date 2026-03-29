@@ -3,6 +3,12 @@
 // Two-model strategy:
 //   Haiku  — tool planning (low token cost)
 //   Sonnet — final reply (natural language, personality, reasoning)
+//
+// Process log step types:
+//   🤔 Planning   — Haiku deciding what to do
+//   📦 Data       — Supabase request in flight
+//   💬 Composing  — Sonnet writing the final reply
+//   ⚠️  Oopsie    — something went wrong, retrying
 
 import type { ChatModelAdapter } from "@assistant-ui/react";
 import { fetchClaude, buildSystemPrompt } from "./anthropic";
@@ -26,7 +32,17 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           .join(" "),
       }));
 
-      // Haiku decides which tools to call
+      let accumulatedText = "";
+
+      const step = (line: string) => {
+        accumulatedText += line + "\n";
+        return accumulatedText;
+      };
+
+      // ── Planning call ─────────────────────────────────────────────
+      accumulatedText = `- 🤔 Solving "${(messages[messages.length - 1]?.content as any[])?.[0]?.text ?? "your request"}"...\n`;
+      yield { content: [{ type: "text" as const, text: accumulatedText }] };
+
       const data = await fetchClaude(
         {
           model: MODEL_PLANNER,
@@ -38,36 +54,34 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         abortSignal,
       );
 
-      if (data.error) throw new Error(data.error.message ?? "Claude API error");
+      if (data.error) {
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: step(
+                `- ⚠️ ${data.error.message ?? "something went wrong"}. Please try again.`,
+              ),
+            },
+          ],
+        };
+        return;
+      }
 
       if (data.stop_reason === "tool_use") {
         const toolUseBlocks = data.content.filter(
           (b: any) => b.type === "tool_use",
         );
 
-        // Contextual opening message based on what we're about to do
-        const firstStep = toolUseBlocks
+        // ── Data calls ──────────────────────────────────────────────
+        const dataStep = toolUseBlocks
           .map((b: any) => {
-            const action = b.name.split("_")[0];
-            const table = b.name
-              .split("_")
-              .slice(1)
-              .join("_")
-              .replace(/_/g, " ");
-            return action === "query"
-              ? `- Let me see how we can put your ${table} together...`
-              : action === "create"
-                ? `- Working out how to create that ${table}...`
-                : action === "update"
-                  ? `- Let me work out those ${table} changes...`
-                  : action === "delete"
-                    ? `- Working out how to remove that ${table}...`
-                    : `- Let me work this out...`;
+            const table = b.name.split("_").slice(1).join(" ");
+            return `- 📦 Fetching ${table}...`;
           })
           .join("\n");
 
-        let accumulatedText = firstStep + "\n";
-        yield { content: [{ type: "text" as const, text: firstStep + "\n" }] };
+        yield { content: [{ type: "text" as const, text: step(dataStep) }] };
 
         const toolResults = await Promise.all(
           toolUseBlocks.map(async (block: any) => {
@@ -89,9 +103,15 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
         for (const r of toolResults) {
           if (r._error) {
-            accumulatedText += `- Hmm, that didn't quite work. Let me try a different approach...\n`;
             yield {
-              content: [{ type: "text" as const, text: accumulatedText }],
+              content: [
+                {
+                  type: "text" as const,
+                  text: step(
+                    "- ⚠️ Hmm, that didn't quite work. Let me try a different approach...",
+                  ),
+                },
+              ],
             };
           }
         }
@@ -108,6 +128,16 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
         let lastResults = toolResults;
 
         while (true) {
+          // ── Reply/planning call ───────────────────────────────────
+          yield {
+            content: [
+              {
+                type: "text" as const,
+                text: step("- 💬 How can I put this together..."),
+              },
+            ],
+          };
+
           const followUpData = await fetchClaude(
             {
               model: MODEL_RESPONDER,
@@ -119,42 +149,37 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             abortSignal,
           );
 
-          if (followUpData.error)
-            throw new Error(followUpData.error.message ?? "Claude API error");
+          if (followUpData.error) {
+            yield {
+              content: [
+                {
+                  type: "text" as const,
+                  text: step(
+                    `- ⚠️ ${followUpData.error.message ?? "something went wrong"}. Please try again.`,
+                  ),
+                },
+              ],
+            };
+            return;
+          }
 
           if (followUpData.stop_reason === "tool_use") {
             const nextToolBlocks = followUpData.content.filter(
               (b: any) => b.type === "tool_use",
             );
 
-            // Contextual message: what we found + what we're doing next
-            const prevTables = lastResults
-              .map((r: any) => r._name.split("_").slice(1).join(" "))
-              .join(", ");
-            const nextStep = nextToolBlocks
+            // ── More data calls ───────────────────────────────────
+            const nextDataStep = nextToolBlocks
               .map((b: any) => {
-                const action = b.name.split("_")[0];
-                const table = b.name
-                  .split("_")
-                  .slice(1)
-                  .join("_")
-                  .replace(/_/g, " ");
-                return action === "query"
-                  ? `- Got the ${prevTables}, now working out the ${table}...`
-                  : action === "create"
-                    ? `- Got the ${prevTables}, working out the ${table} creation...`
-                    : action === "update"
-                      ? `- Got the ${prevTables}, working out the ${table} changes...`
-                      : action === "delete"
-                        ? `- Got the ${prevTables}, working out the ${table} removal...`
-                        : `- Got the ${prevTables}, let me work this out...`;
+                const table = b.name.split("_").slice(1).join(" ");
+                return `- 📦 Fetching ${table}...`;
               })
               .join("\n");
 
-            accumulatedText += `${nextStep}\n`;
             yield {
-              content: [{ type: "text" as const, text: accumulatedText }],
+              content: [{ type: "text" as const, text: step(nextDataStep) }],
             };
+
             const nextResults = await Promise.all(
               nextToolBlocks.map(async (block: any) => {
                 console.log("[IA] executing tool:", block.name, block.input);
@@ -177,12 +202,19 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
             for (const r of nextResults) {
               if (r._error) {
-                accumulatedText += `- Hmm, that didn't quite work. Let me try a different approach...\n`;
                 yield {
-                  content: [{ type: "text" as const, text: accumulatedText }],
+                  content: [
+                    {
+                      type: "text" as const,
+                      text: step(
+                        "- ⚠️ Hmm, that didn't quite work. Let me try a different approach...",
+                      ),
+                    },
+                  ],
                 };
               }
             }
+
             lastResults = nextResults;
             followUpMessages = [
               ...followUpMessages,
@@ -193,6 +225,15 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               },
             ];
           } else {
+            // ── Final reply ───────────────────────────────────────
+            yield {
+              content: [
+                {
+                  type: "text" as const,
+                  text: step("- 💬 How can I put this together..."),
+                },
+              ],
+            };
             const text = followUpData.content
               .filter((b: any) => b.type === "text")
               .map((b: any) => b.text)
@@ -201,7 +242,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               content: [
                 {
                   type: "text" as const,
-                  text: `${accumulatedText}\n\n---\n\n${text}`,
+                  text: `${accumulatedText}\n---\n\n${text}`,
                 },
               ],
             };
@@ -209,6 +250,16 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           }
         }
       } else {
+        // ── Direct reply (no tools needed) ───────────────────────
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: step("- 💬 How can I put this together..."),
+            },
+          ],
+        };
+
         const replyData = await fetchClaude(
           {
             model: MODEL_RESPONDER,
@@ -219,14 +270,32 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           abortSignal,
         );
 
-        if (replyData.error)
-          throw new Error(replyData.error.message ?? "Claude API error");
+        if (replyData.error) {
+          yield {
+            content: [
+              {
+                type: "text" as const,
+                text: step(
+                  `- ⚠️ ${replyData.error.message ?? "something went wrong"}. Please try again.`,
+                ),
+              },
+            ],
+          };
+          return;
+        }
 
         const text = replyData.content
           .filter((b: any) => b.type === "text")
           .map((b: any) => b.text)
           .join("");
-        yield { content: [{ type: "text" as const, text }] };
+        yield {
+          content: [
+            {
+              type: "text" as const,
+              text: `${accumulatedText}\n---\n\n${text}`,
+            },
+          ],
+        };
       }
     },
   };

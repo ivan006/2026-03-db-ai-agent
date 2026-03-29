@@ -152,7 +152,7 @@ ${schemaLines}
 
 Use the available tools to interact with the database.
 Use exact column names from the schema above.
-Present results clearly — each item on its own line/section with good spacing.
+Present results clearly — each item on its own line/section.
 Explain results in plain, friendly language.
 If you are unsure what the user wants, ask a clarifying question.`;
 
