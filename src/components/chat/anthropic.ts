@@ -1,11 +1,10 @@
 // ── Anthropic API ─────────────────────────────────────────────────
 // Handles all communication with the Claude API.
-// Builds system prompts using RUNTIME_SCHEMA from schema-parser.ts
+// Builds system prompts from the pre-built tools array.
 // In dev: routes through Vite proxy to avoid CORS.
 // In prod: routes through the PHP gateway proxy.
 
 import type { IATool, SessionUser } from "./supabase";
-import { RUNTIME_SCHEMA } from "./schema-parser";
 
 const ANTHROPIC_API_URL = import.meta.env.DEV
   ? "/anthropic/v1/messages"
@@ -62,17 +61,20 @@ export function buildSystemPrompt(
     .map(([table, actions]) => `- ${table}: ${actions.join(", ")}`)
     .join("\n");
 
-  const schemaLines = Object.entries(RUNTIME_SCHEMA)
-    .map(([table, def]) => {
-      const cols = Object.entries(def.columns)
-        .map(([col, colDef]) => {
-          const type = colDef.enumValues?.length
-            ? `enum(${colDef.enumValues.join("|")})`
-            : colDef.type;
-          return `${col}:${type}${colDef.nullable ? "?" : ""}`;
+  // Derive schema lines from query tools — they carry the full column properties
+  const schemaLines = tools
+    .filter((t) => t.name.startsWith("query_"))
+    .map((t) => {
+      const tablename = t.name.replace("query_", "");
+      const props =
+        (t.input_schema as any)?.properties?.filters?.properties ?? {};
+      const cols = Object.entries(props)
+        .map(([col, def]: [string, any]) => {
+          const type = def.enum ? `enum(${def.enum.join("|")})` : def.type;
+          return `${col}:${type}${def.nullable ? "?" : ""}`;
         })
         .join(", ");
-      return `  ${table}: ${cols}`;
+      return `  ${tablename}: ${cols}`;
     })
     .join("\n");
 

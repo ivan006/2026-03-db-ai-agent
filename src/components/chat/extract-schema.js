@@ -123,10 +123,24 @@ function parseEnums(content) {
   return enums;
 }
 
-// ── Parse Tables ──────────────────────────────────────────────────
+// ── Type mapping to JSON Schema ───────────────────────────────────
 
-function parseTables(content, enums) {
-  const schema = {};
+function toJsonSchemaType(type) {
+  if (type === "boolean") return "boolean";
+  if (type === "number") return "number";
+  return "string"; // text, uuid, json, timestamp etc all pass as string
+}
+
+// ── Build tools array ─────────────────────────────────────────────
+
+function buildTools(content, enums) {
+  const tools = [
+    {
+      name: "list_tables",
+      description: "Lists all available tables in the database.",
+      input_schema: { type: "object", properties: {}, required: [] },
+    },
+  ];
 
   const tablesMatch = content.match(/Tables:\s*\{([\s\S]*?)Views:/);
   if (!tablesMatch) {
@@ -134,9 +148,6 @@ function parseTables(content, enums) {
     process.exit(1);
   }
 
-  // Split into per-table blocks — each table ends at the next table definition
-  // or the closing of the Tables block. We match greedily up to the next
-  // top-level table key (6-space indent) or the end of the tables block.
   const tablesBlock = tablesMatch[1];
   const tableRegex = /^      (\w+): \{([\s\S]*?)\n      \};/gm;
   let match;
@@ -152,35 +163,115 @@ function parseTables(content, enums) {
 
     const columns = rowMatch ? parseRowBlock(rowMatch[1]) : {};
     const requiredOnInsert = insertMatch
-      ? parseInsertBlock(insertMatch[1])
+      ? parseInsertBlock(insertMatch[1]).filter(
+          (f) => f !== "id" && f !== "created_at",
+        )
       : [];
     const relationships = relMatch ? parseRelationships(relMatch[1]) : [];
 
-    // Resolve enum values into column definitions
+    // Resolve enums into column definitions
     for (const [colName, colDef] of Object.entries(columns)) {
-      // Check if the raw type references an enum
       const enumMatch = tableBody.match(
         new RegExp(
           `${colName}\\s*:\\s*Database\\["public"\\]\\["Enums"\\]\\["(\\w+)"\\]`,
         ),
       );
       if (enumMatch) {
-        const enumName = enumMatch[1];
         colDef.type = "enum";
-        colDef.enumValues = enums[enumName] ?? [];
+        colDef.enumValues = enums[enumMatch[1]] ?? [];
       }
     }
 
-    schema[tableName] = {
-      columns,
-      requiredOnInsert: requiredOnInsert.filter(
-        (f) => f !== "id" && f !== "created_at",
-      ),
-      relationships,
-    };
+    // Build column properties for JSON Schema
+    const colProperties = {};
+    for (const [col, def] of Object.entries(columns)) {
+      if (col === "id" || col === "created_at") continue;
+      const prop = { type: toJsonSchemaType(def.type) };
+      if (def.enumValues?.length) prop.enum = def.enumValues;
+      if (def.nullable) prop.nullable = true;
+      colProperties[col] = prop;
+    }
+
+    // Relationship hint for query description
+    const relHint = relationships.length
+      ? ` Related: ${relationships.map((r) => `${r.columns[0]} → ${r.referencedTable}.${r.referencedColumns[0]}`).join(", ")}.`
+      : "";
+
+    // query
+    tools.push({
+      name: `query_${tableName}`,
+      description: `Fetches records from ${tableName}.${relHint}`,
+      input_schema: {
+        type: "object",
+        properties: {
+          filters: {
+            type: "object",
+            properties: colProperties,
+            required: [],
+          },
+        },
+        required: [],
+      },
+    });
+
+    // create
+    tools.push({
+      name: `create_${tableName}`,
+      description: `Creates a new record in ${tableName}.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          data: {
+            type: "object",
+            properties: colProperties,
+            required: requiredOnInsert,
+          },
+        },
+        required: ["data"],
+      },
+    });
+
+    // update
+    tools.push({
+      name: `update_${tableName}`,
+      description: `Updates a record in ${tableName} by id.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description:
+              "Record ID — must be a valid UUID from a prior query, never invented.",
+          },
+          data: {
+            type: "object",
+            properties: colProperties,
+            required: [],
+          },
+        },
+        required: ["id", "data"],
+      },
+    });
+
+    // delete
+    tools.push({
+      name: `delete_${tableName}`,
+      description: `Deletes a record from ${tableName} by id.`,
+      input_schema: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description:
+              "Record ID — must be a valid UUID from a prior query, never invented.",
+          },
+        },
+        required: ["id"],
+      },
+    });
   }
 
-  return schema;
+  return tools;
 }
 
 // ── Main ──────────────────────────────────────────────────────────
@@ -209,10 +300,21 @@ async function main() {
       : path.join(process.cwd(), "schema.json");
   }
 
-  const enums = parseEnums(input);
-  const schema = parseTables(input, enums);
+  input = input.replace(/\r\n/g, "\n");
 
-  const tableCount = Object.keys(schema).length;
+  if (!input.trim()) {
+    console.error(
+      "Usage:\n" +
+        "  node src/components/chat/extract-schema.js schema.old.ts\n" +
+        "  node src/components/chat/extract-schema.js schema.old.ts custom-output.json",
+    );
+    process.exit(1);
+  }
+
+  const enums = parseEnums(input);
+  const tools = buildTools(input, enums);
+
+  const tableCount = (tools.length - 1) / 4; // subtract list_tables, 4 tools per table
   if (tableCount === 0) {
     console.error(
       "No tables found in input. Check that the file is valid Supabase CLI output.",
@@ -220,21 +322,12 @@ async function main() {
     process.exit(1);
   }
 
-  fs.writeFileSync(outPath, JSON.stringify(schema, null, 2));
+  fs.writeFileSync(outPath, JSON.stringify(tools, null, 2));
 
   console.log(`✓ schema.json written to ${outPath}`);
-  console.log(`  ${tableCount} tables extracted:`);
-  for (const [table, def] of Object.entries(schema)) {
-    const colCount = Object.keys(def.columns).length;
-    const relCount = def.relationships.length;
-    console.log(
-      `  - ${table}: ${colCount} columns, ${relCount} relationship${relCount !== 1 ? "s" : ""}`,
-    );
-  }
+  console.log(`  ${tableCount} tables → ${tools.length} tools generated`);
   if (Object.keys(enums).length > 0) {
-    console.log(
-      `  ${Object.keys(enums).length} enums: ${Object.keys(enums).join(", ")}`,
-    );
+    console.log(`  enums resolved: ${Object.keys(enums).join(", ")}`);
   }
 }
 

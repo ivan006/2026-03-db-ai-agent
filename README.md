@@ -2,45 +2,51 @@
 
 ## Connecting your database
 
-### 1. Open the Supabase SQL Editor
+### 1. Export your Supabase types
 
-In your Supabase project, go to **SQL Editor** and run:
+In your Supabase project dashboard, go to **Project Settings → General** to find your project ID, then run:
 
-```sql
-SELECT json_object_agg(table_name, columns)
-FROM (
-  SELECT
-    table_name,
-    json_agg(column_name::text ORDER BY ordinal_position) AS columns
-  FROM information_schema.columns
-  WHERE table_schema = 'public'
-  GROUP BY table_name
-) t;
+```bash
+npx supabase gen types typescript --project-id your-project-id
 ```
 
 ---
 
-### 2. Copy the result
+### 2. Copy the Database type
 
-The query returns a single JSON object. Copy it.
+From the output, copy only the `Database` type object — everything from `export type Database = {` to its closing `}`.
 
 It looks like this:
 
-```json
-{
-  "users": ["id", "email", "created_at"],
-  "posts": ["id", "title", "body", "user_id"]
+```typescript
+export type Database = {
+  public: {
+    Tables: {
+      your_table: {
+        Row: { ... }
+        Insert: { ... }
+        Update: { ... }
+      }
+    }
+    ...
+  }
 }
 ```
-
----
-
-### 3. Where to put it
 
 Paste it into:
 
 ```
-src/schema.json
+src/components/chat/raw-schema.ts
 ```
 
-This file is gitignored. See `src/schema.json.example` for the expected structure.
+This file is gitignored.
+
+---
+
+### 3. Generate schema.json
+
+```bash
+node src/components/chat/extract-schema.js src/components/chat/raw-schema.ts
+```
+
+This reads `raw-schema.ts` and outputs `src/components/chat/schema.json` — the file the IA uses at runtime. Re-run this any time your database schema changes.
