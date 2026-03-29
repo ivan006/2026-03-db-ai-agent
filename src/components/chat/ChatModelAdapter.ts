@@ -73,22 +73,34 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
           toolUseBlocks.map(async (block: any) => {
             console.log("[IA] executing tool:", block.name, block.input);
             const result = await executeTool(block.name, block.input);
+            const parsed = JSON.parse(result);
+            console.log("[IA] tool result:", block.name, parsed);
             return {
               type: "tool_result" as const,
               tool_use_id: block.id,
               content: result,
               _name: block.name,
-              _result: result,
+              _error: parsed?.code
+                ? (parsed.message ?? "something went wrong")
+                : null,
             };
           }),
         );
+
+        for (const r of toolResults) {
+          if (r._error) {
+            const errMsg = `\nHm, that didn't work — ${r._error}. Let me try a different approach...`;
+            yield { content: [{ type: "text" as const, text: errMsg }] };
+            accumulatedText += errMsg;
+          }
+        }
 
         let followUpMessages: any[] = [
           ...formattedMessages,
           { role: "assistant", content: data.content },
           {
             role: "user",
-            content: toolResults.map(({ _name, _result, ...rest }) => rest),
+            content: toolResults.map(({ _name, _error, ...rest }) => rest),
           },
         ];
 
@@ -146,22 +158,34 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
               nextToolBlocks.map(async (block: any) => {
                 console.log("[IA] executing tool:", block.name, block.input);
                 const result = await executeTool(block.name, block.input);
+                const parsed = JSON.parse(result);
+                console.log("[IA] tool result:", block.name, parsed);
                 return {
                   type: "tool_result" as const,
                   tool_use_id: block.id,
                   content: result,
                   _name: block.name,
-                  _result: result,
+                  _error: parsed?.code
+                    ? (parsed.message ?? "something went wrong")
+                    : null,
                 };
               }),
             );
+
+            for (const r of nextResults) {
+              if (r._error) {
+                const errMsg = `\nHm, that didn't work — ${r._error}. Let me try a different approach...`;
+                yield { content: [{ type: "text" as const, text: errMsg }] };
+                accumulatedText += errMsg;
+              }
+            }
             lastResults = nextResults;
             followUpMessages = [
               ...followUpMessages,
               { role: "assistant", content: followUpData.content },
               {
                 role: "user",
-                content: nextResults.map(({ _name, _result, ...rest }) => rest),
+                content: nextResults.map(({ _name, _error, ...rest }) => rest),
               },
             ];
           } else {
