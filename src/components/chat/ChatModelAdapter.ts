@@ -64,7 +64,6 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             max_tokens: 400,
             system: plannerPrompt,
             tools,
-            tool_choice: { type: "any" },
             messages: plannerMessages,
           },
           abortSignal,
@@ -168,7 +167,16 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
             ],
           };
         } else {
-          // Haiku is done — break out of planning loop
+          // Haiku returned text — if it's a short label that's fine, if it's a full reply pass to Sonnet
+          const haikuText =
+            planData.content.find((b: any) => b.type === "text")?.text ?? "";
+          if (haikuText.length > 100) {
+            // Haiku went rogue — add its context and let Sonnet clean it up
+            plannerMessages = [
+              ...plannerMessages,
+              { role: "assistant", content: planData.content },
+            ];
+          }
           break;
         }
       }

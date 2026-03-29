@@ -67,9 +67,11 @@ function buildUserSection(user: SessionUser | null): string {
 export function buildPlannerPrompt(user: SessionUser | null = null): string {
   const userSection = buildUserSection(user);
 
-  return `You are a data retrieval planner. Your only job is to call the right tools to gather data needed to answer the user's request.
-Do not write replies or explanations — only call tools.
-If you must include text before a tool call, use 5 words or fewer. It will be shown as a process label.
+  return `You are a data retrieval planner. 
+  Your only job is to call the right tools to gather the data needed to answer the user's request.
+A separate explainer will read your tool results and write the reply — so never write explanations or answers yourself, only call tools. 
+It will be shown as a process label. So just tell us what tools you using and dont report on data the tools yield.
+If you must include text before a tool call, use 15 words or fewer.
 
 ${userSection}`;
 }
