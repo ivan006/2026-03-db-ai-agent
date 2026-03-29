@@ -1,0 +1,54 @@
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.4";
+  };
+  public: {
+    Tables: {
+      deals: {
+        Row: {
+          created_at: string | null;
+          id: string;
+          name: string;
+          status: string | null;
+          value: number | null;
+        };
+        Insert: {
+          created_at?: string | null;
+          id?: string;
+          name: string;
+          status?: string | null;
+          value?: number | null;
+        };
+        Update: {
+          created_at?: string | null;
+          id?: string;
+          name?: string;
+          status?: string | null;
+          value?: number | null;
+        };
+        Relationships: [];
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      get_ia_tools: { Args: never; Returns: Json };
+      get_table_columns: { Args: never; Returns: Json };
+      list_public_tables: {
+        Args: never;
+        Returns: {
+          table_name: string;
+        }[];
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
+    };
+  };
+};
