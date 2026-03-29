@@ -188,7 +188,6 @@ function buildTools(content, enums) {
       if (col === "id" || col === "created_at") continue;
       const prop = { type: toJsonSchemaType(def.type) };
       if (def.enumValues?.length) prop.enum = def.enumValues;
-      if (def.nullable) prop.nullable = true;
       colProperties[col] = prop;
     }
 
