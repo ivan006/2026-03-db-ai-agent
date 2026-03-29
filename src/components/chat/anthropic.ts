@@ -94,7 +94,7 @@ export function buildSystemPrompt(
       return `  ${tablename}: ${cols}`;
     })
     .join("\n");
-  console.log(schemaLines);
+  // console.log(schemaLines);
   const personalitySection = personality
     ? `## Personality\n${personality}\n`
     : "";

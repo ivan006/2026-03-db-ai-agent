@@ -48,7 +48,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (!session) return null;
+  if (!session?.user) return null;
 
   const { user } = session;
   console.log("[IA] session user:", user.id, user.email);
