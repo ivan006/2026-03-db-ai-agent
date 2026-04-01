@@ -210,7 +210,7 @@ export function createIAModelAdapter(personality: string): ChatModelAdapter {
 
       yield {
         content: [
-          { type: "text" as const, text: `${accumulatedText}\n\n\n${text}` },
+          { type: "text" as const, text: `${accumulatedText}\n--\n\n${text}` },
         ],
       };
     },

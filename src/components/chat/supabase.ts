@@ -154,8 +154,7 @@ export async function executeTool(
         .from(tablename)
         .update(input.data as object)
         .eq("id", input.id as string)
-        .select()
-        .single();
+        .select();
       if (error) return JSON.stringify({ error: error.message });
       return JSON.stringify({ [tablename]: data });
     }
